@@ -176,7 +176,7 @@ export function buildKnowledgeGraph(
       if (cat.recordIds.includes(rec.id)) {
         const topicId = `topic:${cat.id}`;
         ensureNode(topicId, cat.label, 'TOPIC', rec.id, rec.sourceUrl, cat.description);
-        addEdge(invNodeId, topicId, 'STUDIES_TOPIC', 'VERIFIED', rec.sourceLabel);
+        addEdge(invNodeId, topicId, 'INVESTIGATES', 'VERIFIED', rec.sourceLabel);
       }
     }
 
@@ -194,7 +194,7 @@ export function buildKnowledgeGraph(
       rec.sourceUrl,
       rec.sourceLabel
     );
-    addEdge(primaryPubId, invNodeId, 'DOCUMENTS', 'VERIFIED', rec.sourceUrl);
+    addEdge(invNodeId, primaryPubId, 'DOCUMENTED_IN', 'VERIFIED', rec.sourceUrl);
 
     if (rec.publications) {
       for (const pub of rec.publications) {
@@ -207,7 +207,7 @@ export function buildKnowledgeGraph(
           `https://doi.org/${pub.doi}`,
           `${pub.title} (${pub.journal}, ${pub.date})`
         );
-        addEdge(pubId, invNodeId, 'DESCRIBES', 'VERIFIED', `DOI ${pub.doi}`);
+        addEdge(invNodeId, pubId, 'DOCUMENTED_IN', 'VERIFIED', `DOI ${pub.doi}`);
       }
     }
 
@@ -217,7 +217,7 @@ export function buildKnowledgeGraph(
       const cleanFuel = fuel.split('(')[0].trim();
       const fuelId = slugifyId('fuel', cleanFuel);
       ensureNode(fuelId, cleanFuel, 'FUEL', rec.id, rec.sourceUrl, fuel);
-      addEdge(invNodeId, fuelId, 'USES_FUEL', 'VERIFIED', rec.sourceLabel);
+      addEdge(invNodeId, fuelId, 'USES_MATERIAL', 'VERIFIED', rec.sourceLabel);
     }
 
     // Environmental Variables
@@ -229,7 +229,7 @@ export function buildKnowledgeGraph(
       const normalized = shortTopicFromVariable(envVar);
       const varId = slugifyId('var', normalized);
       ensureNode(varId, normalized, 'VARIABLE', rec.id, rec.sourceUrl, envVar);
-      addEdge(invNodeId, varId, 'VARIES_OR_MEASURES', 'VERIFIED', rec.sourceLabel);
+      addEdge(invNodeId, varId, 'MEASURES', 'VERIFIED', rec.sourceLabel);
     }
 
     // Sensors
@@ -256,8 +256,8 @@ export function buildKnowledgeGraph(
       addEdge(invNodeId, methodId, 'USES_METHOD', 'VERIFIED', rec.sourceLabel);
     }
 
-    // Findings (show in focused view cleanly; in All-mode show summary findings for primary records)
-    if (rec.reportedFindings && focusId !== 'ALL') {
+    // Findings (show in focused view cleanly; in All-mode show concise summary node so SUPPORTS_FINDING is always inspectable)
+    if (rec.reportedFindings && (focusId !== 'ALL' || rec.hasQuantitativeSummary)) {
       const findId = `finding:${rec.id}`;
       ensureNode(
         findId,
@@ -267,8 +267,8 @@ export function buildKnowledgeGraph(
         rec.sourceUrl,
         rec.reportedFindings
       );
-      addEdge(invNodeId, findId, 'REPORTS_FINDING', 'VERIFIED', rec.sourceLabel);
-      addEdge(findId, primaryPubId, 'SUPPORTED_BY', 'VERIFIED', rec.sourceLabel);
+      addEdge(primaryPubId, findId, 'SUPPORTS_FINDING', 'VERIFIED', rec.sourceLabel);
+      addEdge(invNodeId, findId, 'SUPPORTS_FINDING', 'VERIFIED', rec.sourceLabel);
     }
 
     // Limitations (focused view)
@@ -305,9 +305,9 @@ export function buildKnowledgeGraph(
           addEdge(
             invNodes[i].id,
             invNodes[j].id,
-            'RELATED_PROGRAM_FAMILY',
+            'RELATED_TO',
             'INFERRED',
-            `Shared dossier family: ${a.family}`
+            `Inferred shared dossier family: ${a.family}`
           );
         }
       }
@@ -317,6 +317,28 @@ export function buildKnowledgeGraph(
   return {
     nodes: Array.from(nodeMap.values()),
     edges,
+  };
+}
+
+export function summarizeGraphAudit(graph: KnowledgeGraphData): {
+  verifiedEdges: number;
+  inferredEdges: number;
+  relationCounts: Array<{ relationship: string; count: number }>;
+} {
+  const relMap = new Map<string, number>();
+  let verifiedEdges = 0;
+  let inferredEdges = 0;
+  for (const e of graph.edges) {
+    if (e.verification === 'VERIFIED') verifiedEdges += 1;
+    else inferredEdges += 1;
+    relMap.set(e.relationship, (relMap.get(e.relationship) ?? 0) + 1);
+  }
+  return {
+    verifiedEdges,
+    inferredEdges,
+    relationCounts: Array.from(relMap.entries())
+      .map(([relationship, count]) => ({ relationship, count }))
+      .sort((a, b) => b.count - a.count),
   };
 }
 

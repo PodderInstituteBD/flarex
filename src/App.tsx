@@ -4,6 +4,7 @@
  */
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DemoTourModal } from './components/DemoTourModal';
 import { AppPage, CopyToastState, Layout } from './components/Layout';
 import { LoadingSkeleton } from './components/ui/States';
 import { INVESTIGATIONS } from './data/researchCatalog';
@@ -11,12 +12,15 @@ import { HomeOverview } from './pages/HomeOverview';
 import { InvestigationDetails } from './pages/InvestigationDetails';
 import { InvestigationExplorer } from './pages/InvestigationExplorer';
 import { InvestigationRecord } from './types/research';
+import { DemoTourStep } from './utils/demoGuide';
 import { ExportReportType } from './utils/exportCenter';
 import {
   resolveGlobalShortcut,
   shouldIgnoreShortcutEvent,
 } from './utils/keyboardShortcuts';
 import { computeResearchStats, DomainCategoryId } from './utils/researchLogic';
+import { ReproducibleAnalysisRun } from './utils/scientificAnalysis';
+import { IngestedDatasetPackage } from './utils/scientificIngestion';
 import { buildResearchUrlPath, parseResearchUrlState } from './utils/urlState';
 import {
   addSavedComparison,
@@ -91,8 +95,45 @@ const ExportCenter = lazy(() =>
 const STORAGE_RECENT_KEY = 'flarex_recent_investigations_v1';
 const STORAGE_COMPARE_KEY = 'flarex_compare_ids_v1';
 const STORAGE_THEME_KEY = 'flarex_theme_v1';
+const STORAGE_FLAREX5_SESSION_KEY = 'flarex5_science_session_v1';
 
 const VALID_INVESTIGATION_IDS = new Set(INVESTIGATIONS.map((r) => r.id));
+
+export interface ActiveAiDocumentContext {
+  title: string;
+  sourceUrl: string;
+  content: string;
+}
+
+export interface ClientErrorLogItem {
+  id: string;
+  timestamp: string;
+  source: string;
+  message: string;
+}
+
+interface StoredScienceSession {
+  ingestedDatasets: IngestedDatasetPackage[];
+  analysisHistory: ReproducibleAnalysisRun[];
+}
+
+function readStoredScienceSession(): StoredScienceSession {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_FLAREX5_SESSION_KEY);
+    if (!raw) return { ingestedDatasets: [], analysisHistory: [] };
+    const parsed = JSON.parse(raw) as Partial<StoredScienceSession>;
+    return {
+      ingestedDatasets: Array.isArray(parsed.ingestedDatasets)
+        ? parsed.ingestedDatasets.slice(0, 5)
+        : [],
+      analysisHistory: Array.isArray(parsed.analysisHistory)
+        ? parsed.analysisHistory.slice(0, 20)
+        : [],
+    };
+  } catch {
+    return { ingestedDatasets: [], analysisHistory: [] };
+  }
+}
 
 function readStoredIds(key: string, fallback: string[]): string[] {
   try {
@@ -184,17 +225,92 @@ export default function App() {
   const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null);
   const [graphFocusId, setGraphFocusId] = useState<string | 'ALL'>('ALL');
   const [exportReportType, setExportReportType] =
-    useState<ExportReportType>('investigation_profile');
+    useState<ExportReportType>('scientific_full_report');
   const [workspace, setWorkspace] = useState<ResearchWorkspaceState>(() =>
     loadWorkspaceFromStorage(VALID_INVESTIGATION_IDS)
   );
   const [searchFocusTrigger, setSearchFocusTrigger] = useState(0);
   const [assistantFocusTrigger, setAssistantFocusTrigger] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [demoOpen, setDemoOpen] = useState<boolean>(
+    Boolean(initialUrlState.demoMode)
+  );
   const [copyToast, setCopyToast] = useState<CopyToastState | null>(null);
   const toastTimerRef = useRef<number | null>(null);
+  const initialSession = useMemo(() => readStoredScienceSession(), []);
+  const [ingestedDatasets, setIngestedDatasets] = useState<IngestedDatasetPackage[]>(
+    initialSession.ingestedDatasets
+  );
+  const [analysisHistory, setAnalysisHistory] = useState<ReproducibleAnalysisRun[]>(
+    initialSession.analysisHistory
+  );
+  const [activeDocumentForAi, setActiveDocumentForAi] =
+    useState<ActiveAiDocumentContext | null>(null);
+  const [clientErrors, setClientErrors] = useState<ClientErrorLogItem[]>([]);
 
   const stats = useMemo(() => computeResearchStats(INVESTIGATIONS), []);
+
+  useEffect(() => {
+    try {
+      const compactDatasets = ingestedDatasets.slice(0, 5).map((ds) => ({
+        ...ds,
+        originalRows: ds.originalRows.slice(0, 250),
+        normalizedRows: ds.normalizedRows.slice(0, 250),
+      }));
+      window.localStorage.setItem(
+        STORAGE_FLAREX5_SESSION_KEY,
+        JSON.stringify({
+          ingestedDatasets: compactDatasets,
+          analysisHistory: analysisHistory.slice(0, 20),
+        })
+      );
+    } catch {
+      // Ignore storage quota overflow on large CSV uploads
+    }
+  }, [ingestedDatasets, analysisHistory]);
+
+  const handleIngestDataset = useCallback((pkg: IngestedDatasetPackage) => {
+    setIngestedDatasets((prev) => [
+      pkg,
+      ...prev.filter((d) => d.provenance.datasetId !== pkg.provenance.datasetId),
+    ].slice(0, 6));
+  }, []);
+
+  const handleRemoveIngestedDataset = useCallback((datasetId: string) => {
+    setIngestedDatasets((prev) =>
+      prev.filter((d) => d.provenance.datasetId !== datasetId)
+    );
+  }, []);
+
+  const handleRecordAnalysisRun = useCallback((run: ReproducibleAnalysisRun) => {
+    setAnalysisHistory((prev) => [run, ...prev].slice(0, 25));
+  }, []);
+
+  const handleRecordClientError = useCallback((source: string, message: string) => {
+    setClientErrors((prev) =>
+      [
+        {
+          id: `cerr-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+          timestamp: new Date().toISOString(),
+          source,
+          message,
+        },
+        ...prev,
+      ].slice(0, 20)
+    );
+  }, []);
+
+  const handleAttachDocumentToAi = useCallback(
+    (doc: ActiveAiDocumentContext, navigateToAi = true) => {
+      setActiveDocumentForAi(doc);
+      if (navigateToAi) {
+        setActivePage('assistant');
+        setAssistantFocusTrigger((n) => n + 1);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     saveWorkspaceToStorage(workspace);
@@ -244,6 +360,7 @@ export default function App() {
         activePage === 'detail' ? selectedInvestigationId : undefined,
       family: activePage === 'explorer' ? explorerFamilyFilter : undefined,
       category: activePage === 'explorer' ? explorerCategoryFilter : undefined,
+      demoMode: demoOpen || undefined,
     });
     const currentPath = `${window.location.pathname}${window.location.search}`;
     if (currentPath !== targetPath) {
@@ -254,6 +371,7 @@ export default function App() {
     selectedInvestigationId,
     explorerFamilyFilter,
     explorerCategoryFilter,
+    demoOpen,
   ]);
 
   useEffect(() => {
@@ -269,6 +387,7 @@ export default function App() {
       }
       setExplorerFamilyFilter(nextState.family ?? 'ALL');
       setExplorerCategoryFilter(nextState.category ?? 'ALL');
+      setDemoOpen(Boolean(nextState.demoMode));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -300,6 +419,7 @@ export default function App() {
         activePage === 'detail' ? selectedInvestigationId : undefined,
       family: activePage === 'explorer' ? explorerFamilyFilter : undefined,
       category: activePage === 'explorer' ? explorerCategoryFilter : undefined,
+      demoMode: demoOpen || undefined,
     });
     const shareUrl = new URL(targetPath, window.location.origin).toString();
     const copied = await writeTextToClipboard(shareUrl);
@@ -313,6 +433,7 @@ export default function App() {
     selectedInvestigationId,
     explorerFamilyFilter,
     explorerCategoryFilter,
+    demoOpen,
     showCopyToast,
   ]);
 
@@ -435,6 +556,39 @@ export default function App() {
     setAssistantFocusTrigger((n) => n + 1);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  const handleExecuteDemoStepAction = useCallback(
+    (step: DemoTourStep) => {
+      if (step.comparisonPresetIds && step.comparisonPresetIds.length > 0) {
+        const valid = step.comparisonPresetIds
+          .filter((id) => VALID_INVESTIGATION_IDS.has(id))
+          .slice(0, 3);
+        if (valid.length > 0) {
+          setCompareIds(valid);
+        }
+        setActivePage('compare');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      if (
+        step.featuredInvestigationId &&
+        VALID_INVESTIGATION_IDS.has(step.featuredInvestigationId)
+      ) {
+        handleOpenInvestigation(step.featuredInvestigationId);
+        return;
+      }
+      if (step.realAiDemoPrompt) {
+        setAssistantFocusId(null);
+        setAssistantPrompt(step.realAiDemoPrompt);
+        setActivePage('assistant');
+        setAssistantFocusTrigger((n) => n + 1);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      handleNavigate(step.targetPage);
+    },
+    [handleNavigate, handleOpenInvestigation]
+  );
 
   const handleToggleSaveInvestigation = useCallback(
     (id: string) => {
@@ -586,7 +740,15 @@ export default function App() {
       copyToast={copyToast}
       theme={theme}
       onToggleTheme={handleToggleTheme}
+      onOpenDemoMode={() => setDemoOpen(true)}
     >
+      <DemoTourModal
+        open={demoOpen}
+        onClose={() => setDemoOpen(false)}
+        onNavigate={handleNavigate}
+        onExecuteStepAction={handleExecuteDemoStepAction}
+      />
+
       {activePage === 'overview' && (
         <HomeOverview
           stats={stats}
@@ -595,6 +757,7 @@ export default function App() {
           onNavigate={handleNavigate}
           onOpenInvestigation={handleOpenInvestigation}
           onSelectCategoryFilter={handleSelectCategoryFilter}
+          onOpenDemoMode={() => setDemoOpen(true)}
         />
       )}
 
@@ -646,6 +809,13 @@ export default function App() {
           <ScientificDataExplorer
             investigations={INVESTIGATIONS}
             onOpenInvestigation={handleOpenInvestigation}
+            ingestedDatasets={ingestedDatasets}
+            analysisHistory={analysisHistory}
+            onIngestDataset={handleIngestDataset}
+            onRemoveIngestedDataset={handleRemoveIngestedDataset}
+            onRecordAnalysisRun={handleRecordAnalysisRun}
+            clientErrors={clientErrors}
+            onRecordClientError={handleRecordClientError}
           />
         </Suspense>
       )}
@@ -662,7 +832,15 @@ export default function App() {
 
       {activePage === 'documents' && (
         <Suspense fallback={<LoadingSkeleton rows={4} />}>
-          <DocumentIntelligence onOpenInvestigation={handleOpenInvestigation} />
+          <DocumentIntelligence
+            onOpenInvestigation={handleOpenInvestigation}
+            onSendToNumericalAnalysis={(pkg) => {
+              handleIngestDataset(pkg);
+              handleNavigate('data');
+              showCopyToast('Dataset imported into Numerical Analysis');
+            }}
+            onAnalyzeDocumentInAi={(doc) => handleAttachDocumentToAi(doc, true)}
+          />
         </Suspense>
       )}
 
@@ -683,6 +861,9 @@ export default function App() {
             initialPrompt={assistantPrompt}
             inputFocusTrigger={assistantFocusTrigger}
             onOpenInvestigation={handleOpenInvestigation}
+            attachedDocument={activeDocumentForAi}
+            onClearAttachedDocument={() => setActiveDocumentForAi(null)}
+            onRecordClientError={handleRecordClientError}
           />
         </Suspense>
       )}
@@ -722,6 +903,8 @@ export default function App() {
             compareIds={compareIds}
             workspace={workspace}
             initialReportType={exportReportType}
+            ingestedDatasets={ingestedDatasets}
+            analysisHistory={analysisHistory}
           />
         </Suspense>
       )}
@@ -733,6 +916,8 @@ export default function App() {
             onOpenInvestigation={handleOpenInvestigation}
             bookmarkedSources={workspace.bookmarkedSources}
             onToggleBookmark={handleToggleBookmarkSource}
+            onAttachNtrsDocument={(doc) => handleAttachDocumentToAi(doc, true)}
+            onRecordClientError={handleRecordClientError}
           />
         </Suspense>
       )}

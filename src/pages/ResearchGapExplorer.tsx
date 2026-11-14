@@ -85,29 +85,62 @@ export function ResearchGapExplorer({
 
       {/* Module 8 Dynamic Gap Signals */}
       <section aria-labelledby="dynamic-gap-signals" className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2
             id="dynamic-gap-signals"
             className="font-display text-base font-bold text-[var(--text-primary)]"
           >
-            Dynamic Database Gap Signals ({gapIntelligence.dynamicSignals.length})
+            FLAREX Research Intelligence Audit ({gapIntelligence.dynamicSignals.length} Computed Signals)
           </h2>
-          <Badge tone="cyan">Computed from Indexed Records</Badge>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Badge tone="cyan">
+              {gapIntelligence.coverageAudit.withPeerReviewedDoi}/{gapIntelligence.coverageAudit.totalRecords} w/ DOI
+            </Badge>
+            <Badge tone="neutral">
+              {gapIntelligence.coverageAudit.withCompleteEnvParams}/{gapIntelligence.coverageAudit.totalRecords} Complete Env. Matrix
+            </Badge>
+            <Badge tone="warning">
+              {gapIntelligence.coverageAudit.withRawLocalCsv}/{gapIntelligence.coverageAudit.totalRecords} Local Raw CSV
+            </Badge>
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {gapIntelligence.dynamicSignals.map((sig) => (
-            <Card key={sig.id} padding="sm" className="space-y-2 flex flex-col justify-between">
-              <div className="space-y-1.5">
+            <Card key={sig.id} padding="sm" className="space-y-2.5 flex flex-col justify-between">
+              <div className="space-y-2">
                 <Badge tone="warning">{sig.signalLabel}</Badge>
                 <h3 className="text-sm font-semibold text-[var(--text-primary)]">
                   {sig.title}
                 </h3>
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  {sig.evidenceBasis}
-                </p>
-                <p className="text-[11px] text-[var(--text-muted)]">
-                  Caveat: {sig.caveat}
-                </p>
+                <div className="text-xs text-[var(--text-secondary)] space-y-1.5 leading-relaxed">
+                  <p>
+                    <strong className="text-[var(--text-primary)]">Evidence used:</strong>{' '}
+                    {sig.evidenceBasis}
+                  </p>
+                  <p>
+                    <strong className="text-[var(--text-primary)]">Missing information:</strong>{' '}
+                    {sig.missingInformation}
+                  </p>
+                  <p className="text-[11px] text-[var(--text-muted)]">
+                    <strong className="text-[var(--status-warning)]">Limitations:</strong>{' '}
+                    {sig.caveat}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-1 pt-1">
+                  <span className="text-[11px] text-[var(--text-muted)] mr-1">
+                    Supporting records:
+                  </span>
+                  {sig.affectedInvestigationIds.slice(0, 4).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => onOpenInvestigation(id)}
+                      className="text-[11px] px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] border border-[var(--border-subtle)] text-[var(--accent-blue)] hover:underline cursor-pointer"
+                    >
+                      {id}
+                    </button>
+                  ))}
+                </div>
               </div>
               {onAskAiQuestion && sig.suggestedQuestions[0] && (
                 <button
@@ -302,7 +335,7 @@ export function ResearchGapExplorer({
                   <div className="p-3.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1.5">
                     <h3 className="text-xs font-semibold text-[var(--status-warning)] flex items-center gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Limitations &amp; Caveats</span>
+                      <span>Missing Information &amp; Limitations</span>
                     </h3>
                     <ul className="text-xs text-[var(--text-secondary)] space-y-1 list-disc list-inside leading-relaxed">
                       {gap.limitations.map((lim) => (

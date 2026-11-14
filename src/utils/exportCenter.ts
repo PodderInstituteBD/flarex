@@ -4,6 +4,7 @@ import { buildComparisonRows } from './researchLogic.ts';
 import type { ResearchWorkspaceState } from './workspaceStore.ts';
 
 export type ExportReportType =
+  | 'scientific_full_report'
   | 'investigation_profile'
   | 'comparison_report'
   | 'workspace_summary'
@@ -38,10 +39,13 @@ function toCsvTable(headers: string[], rows: Array<Array<string | number | boole
 
 export function generateExportCsv(input: ExportBundleInput): string {
   switch (input.reportType) {
+    case 'scientific_full_report':
     case 'investigation_profile':
     case 'database_records': {
       const target =
-        input.reportType === 'investigation_profile' && input.selectedInvestigations.length > 0
+        (input.reportType === 'investigation_profile' ||
+          input.reportType === 'scientific_full_report') &&
+        input.selectedInvestigations.length > 0
           ? input.selectedInvestigations
           : input.allInvestigations;
       return toCsvTable(
@@ -233,13 +237,15 @@ export function generateExportJson(input: ExportBundleInput): string {
   };
 
   switch (input.reportType) {
+    case 'scientific_full_report':
     case 'investigation_profile':
     case 'database_records':
       return JSON.stringify(
         {
           ...baseEnvelope,
           records:
-            input.reportType === 'investigation_profile' &&
+            (input.reportType === 'investigation_profile' ||
+              input.reportType === 'scientific_full_report') &&
             input.selectedInvestigations.length > 0
               ? input.selectedInvestigations
               : input.allInvestigations,
@@ -312,10 +318,12 @@ export function generateExportMarkdown(input: ExportBundleInput): string {
   }
 
   switch (input.reportType) {
+    case 'scientific_full_report':
     case 'investigation_profile':
     case 'database_records': {
       const target =
-        input.reportType === 'investigation_profile' &&
+        (input.reportType === 'investigation_profile' ||
+          input.reportType === 'scientific_full_report') &&
         input.selectedInvestigations.length > 0
           ? input.selectedInvestigations
           : input.allInvestigations;

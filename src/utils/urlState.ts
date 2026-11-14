@@ -5,6 +5,7 @@ export interface ResearchUrlState {
   investigationId?: string;
   family?: string;
   category?: string;
+  demoMode?: boolean;
 }
 
 const VALID_PAGES = new Set<AppPage>([
@@ -35,13 +36,14 @@ export function parseResearchUrlState(
     rawPage && VALID_PAGES.has(rawPage as AppPage)
       ? (rawPage as AppPage)
       : 'overview';
+  const demoMode = params.get('demo') === '1';
 
   if (page === 'detail') {
     const rawId = params.get('id') ?? '';
     const investigationId = validInvestigationIds.has(rawId)
       ? rawId
       : fallbackInvestigationId;
-    return { page: 'detail', investigationId };
+    return demoMode ? { page: 'detail', investigationId, demoMode } : { page: 'detail', investigationId };
   }
 
   if (page === 'explorer') {
@@ -54,10 +56,11 @@ export function parseResearchUrlState(
     if (rawCategory && rawCategory !== 'ALL') {
       state.category = rawCategory;
     }
+    if (demoMode) state.demoMode = true;
     return state;
   }
 
-  return { page };
+  return demoMode ? { page, demoMode } : { page };
 }
 
 export function buildResearchUrlPath(
@@ -65,23 +68,26 @@ export function buildResearchUrlPath(
   state: ResearchUrlState
 ): string {
   const basePath = pathname || '/';
-  if (state.page === 'overview') {
-    return basePath;
-  }
-
   const params = new URLSearchParams();
-  params.set('page', state.page);
 
-  if (state.page === 'detail' && state.investigationId) {
-    params.set('id', state.investigationId);
-  } else if (state.page === 'explorer') {
-    if (state.family && state.family !== 'ALL') {
-      params.set('family', state.family);
-    }
-    if (state.category && state.category !== 'ALL') {
-      params.set('category', state.category);
+  if (state.page !== 'overview') {
+    params.set('page', state.page);
+    if (state.page === 'detail' && state.investigationId) {
+      params.set('id', state.investigationId);
+    } else if (state.page === 'explorer') {
+      if (state.family && state.family !== 'ALL') {
+        params.set('family', state.family);
+      }
+      if (state.category && state.category !== 'ALL') {
+        params.set('category', state.category);
+      }
     }
   }
 
-  return `${basePath}?${params.toString()}`;
+  if (state.demoMode) {
+    params.set('demo', '1');
+  }
+
+  const qs = params.toString();
+  return qs ? `${basePath}?${qs}` : basePath;
 }

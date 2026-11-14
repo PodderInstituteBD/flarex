@@ -106,14 +106,12 @@ export function InvestigationDetails({
       ? [{ id: 'sec-fuels', label: 'Materials and Fuels' }]
       : []),
     ...(investigation.environmentalVariables.length > 0
-      ? [{ id: 'sec-env', label: 'Environmental Variables' }]
+      ? [{ id: 'sec-env', label: 'Experimental Variables' }]
       : []),
     ...(investigation.sensors && investigation.sensors.length > 0
       ? [{ id: 'sec-sensors', label: 'Sensors and Diagnostics' }]
       : []),
-    ...(investigation.quantitativeData.length > 0
-      ? [{ id: 'sec-quantitative', label: 'Quantitative Figures' }]
-      : []),
+    { id: 'sec-quantitative', label: 'Available Numerical Data' },
     ...(investigation.publications && investigation.publications.length > 0
       ? [{ id: 'sec-publications', label: 'Publications & DOIs' }]
       : []),
@@ -124,6 +122,9 @@ export function InvestigationDetails({
       ? [{ id: 'sec-notes', label: 'Historical Context & Notes' }]
       : []),
     { id: 'sec-sources', label: 'Sources and References' },
+    ...(relatedMatches.length > 0
+      ? [{ id: 'sec-related', label: 'Related Investigations' }]
+      : []),
   ];
 
   return (
@@ -475,15 +476,19 @@ export function InvestigationDetails({
             </div>
           )}
 
-          {/* Published Quantitative Figures & Operating Ranges */}
-          {investigation.quantitativeData.length > 0 && (
-            <Card id="sec-quantitative" as="section" className="scroll-mt-20 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="font-display text-[17px] font-semibold text-[var(--text-primary)]">
-                  Quantitative Figures &amp; Experimental Ranges
-                </h2>
-                <Badge tone="success">Published / Operating Bounds</Badge>
-              </div>
+          {/* Published Quantitative Figures & Available Numerical Data */}
+          <Card id="sec-quantitative" as="section" className="scroll-mt-20 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-display text-[17px] font-semibold text-[var(--text-primary)]">
+                Available Numerical Data &amp; Quantitative Figures
+              </h2>
+              <Badge tone={investigation.quantitativeData.length > 0 ? 'success' : 'warning'}>
+                {investigation.quantitativeData.length > 0
+                  ? `${investigation.quantitativeData.length} Published Figure(s) / Range(s)`
+                  : 'No Embedded Local Telemetry'}
+              </Badge>
+            </div>
+            {investigation.quantitativeData.length > 0 ? (
               <div className="space-y-3">
                 {investigation.quantitativeData.map((datum) => (
                   <div
@@ -514,8 +519,18 @@ export function InvestigationDetails({
                   </div>
                 ))}
               </div>
-            </Card>
-          )}
+            ) : (
+              <div className="p-4 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-2 text-xs text-[var(--text-secondary)]">
+                <p>
+                  <strong className="text-[var(--text-primary)]">Availability Status:</strong>{' '}
+                  {investigation.dataAvailabilityLabel}
+                </p>
+                <p>
+                  No local numerical CSV or published operating-bound array is embedded in FLAREX for {investigation.shortName}. In accordance with FLAREX anti-fabrication rules, qualitative findings are preserved in prose above and raw telemetry must be inspected directly via NASA PSI or NTRS.
+                </p>
+              </div>
+            )}
+          </Card>
 
           {/* Publications */}
           {investigation.publications && investigation.publications.length > 0 && (
@@ -620,7 +635,7 @@ export function InvestigationDetails({
           </Card>
           {/* Related Investigations Discovery (Cross-Investigation Intelligence) */}
           {relatedMatches.length > 0 && (
-            <Card as="section" className="space-y-3">
+            <Card id="sec-related" as="section" className="scroll-mt-20 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="font-display text-[17px] font-semibold text-[var(--text-primary)]">
                   Related Investigations &amp; Compatibility Notes

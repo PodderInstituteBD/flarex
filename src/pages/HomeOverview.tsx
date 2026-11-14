@@ -15,13 +15,24 @@ import {
   Wind,
 } from 'lucide-react';
 import { useMemo } from 'react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { AvailabilityIndicator, EvidenceLabel } from '../components/EvidenceLabel';
 import { AppPage } from '../components/Layout';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, Panel } from '../components/ui/Card';
 import { NoticeBanner } from '../components/ui/States';
+import { DOSSIER_METADATA } from '../data/researchCatalog';
 import { InvestigationRecord } from '../types/research';
+import { validateResearchDatabase } from '../utils/databaseValidator';
 import {
   computeCategoryBreakdown,
   DomainCategoryId,
@@ -36,6 +47,7 @@ interface HomeOverviewProps {
   onNavigate: (page: AppPage) => void;
   onOpenInvestigation: (id: string) => void;
   onSelectCategoryFilter: (categoryId: DomainCategoryId) => void;
+  onOpenDemoMode?: () => void;
 }
 
 const CATEGORY_ICON_MAP: Record<DomainCategoryId, typeof Flame> = {
@@ -55,6 +67,7 @@ export function HomeOverview({
   onNavigate,
   onOpenInvestigation,
   onSelectCategoryFilter,
+  onOpenDemoMode,
 }: HomeOverviewProps) {
   const categories = useMemo(
     () => computeCategoryBreakdown(investigations),
@@ -63,6 +76,11 @@ export function HomeOverview({
 
   const trends = useMemo(
     () => computeScientificTrends(investigations),
+    [investigations]
+  );
+
+  const dbAudit = useMemo(
+    () => validateResearchDatabase(investigations),
     [investigations]
   );
 
@@ -125,6 +143,17 @@ export function HomeOverview({
                 <BarChart3 className="w-4 h-4 text-[var(--accent-cyan)]" aria-hidden="true" />
                 <span>Open Data Explorer</span>
               </Button>
+              {onOpenDemoMode && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={onOpenDemoMode}
+                >
+                  <Compass className="w-4 h-4 text-[var(--accent-blue)]" aria-hidden="true" />
+                  <span>Demonstration Mode</span>
+                </Button>
+              )}
             </div>
           </div>
 
@@ -198,7 +227,11 @@ export function HomeOverview({
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
-          <Card padding="sm">
+          <button
+            type="button"
+            onClick={() => onNavigate('explorer')}
+            className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 hover:bg-[var(--bg-elevated)] p-4 text-left transition-colors cursor-pointer"
+          >
             <p className="text-[12px] text-[var(--text-secondary)]">Investigations Indexed</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--text-primary)]">
               {stats.totalRecords}
@@ -206,9 +239,13 @@ export function HomeOverview({
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
               {stats.nasaInvestigations} NASA · {stats.reviewPapers + stats.complementaryTerrestrial} review/1g
             </p>
-          </Card>
+          </button>
 
-          <Card padding="sm">
+          <button
+            type="button"
+            onClick={() => onNavigate('sources')}
+            className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 hover:bg-[var(--bg-elevated)] p-4 text-left transition-colors cursor-pointer"
+          >
             <p className="text-[12px] text-[var(--text-secondary)]">Indexed Publications</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--accent-blue)]">
               {trends.publicationCoverage.totalPrimaryAndPeerPublications}
@@ -216,9 +253,13 @@ export function HomeOverview({
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
               {trends.publicationCoverage.withPeerReviewedDoi} w/ DOI · {trends.publicationCoverage.withNtrsId} NTRS
             </p>
-          </Card>
+          </button>
 
-          <Card padding="sm">
+          <button
+            type="button"
+            onClick={() => onNavigate('sources')}
+            className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 hover:bg-[var(--bg-elevated)] p-4 text-left transition-colors cursor-pointer"
+          >
             <p className="text-[12px] text-[var(--text-secondary)]">PSI Dataset IDs</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--accent-cyan)]">
               {trends.publicationCoverage.withPsiId}
@@ -226,9 +267,13 @@ export function HomeOverview({
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
               {stats.publicInPsi} publicly indexed in PSI
             </p>
-          </Card>
+          </button>
 
-          <Card padding="sm">
+          <button
+            type="button"
+            onClick={() => onNavigate('explorer')}
+            className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 hover:bg-[var(--bg-elevated)] p-4 text-left transition-colors cursor-pointer"
+          >
             <p className="text-[12px] text-[var(--text-secondary)]">Research Categories</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--text-primary)]">
               {categories.length}
@@ -236,9 +281,13 @@ export function HomeOverview({
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
               Across {stats.familyCounts.length} dossier families
             </p>
-          </Card>
+          </button>
 
-          <Card padding="sm">
+          <button
+            type="button"
+            onClick={() => onNavigate('data')}
+            className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 hover:bg-[var(--bg-elevated)] p-4 text-left transition-colors cursor-pointer"
+          >
             <p className="text-[12px] text-[var(--text-secondary)]">Quantitative Summaries</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--status-success)]">
               {stats.withQuantitativeSummary}
@@ -246,9 +295,13 @@ export function HomeOverview({
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
               Published counts / ranges
             </p>
-          </Card>
+          </button>
 
-          <Card padding="sm">
+          <button
+            type="button"
+            onClick={() => onNavigate('data')}
+            className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 hover:bg-[var(--bg-elevated)] p-4 text-left transition-colors cursor-pointer"
+          >
             <p className="text-[12px] text-[var(--text-secondary)]">Without Local Raw CSV</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--status-warning)]">
               {stats.withoutRawNumericalData}
@@ -256,49 +309,103 @@ export function HomeOverview({
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
               Raw logs hosted in PSI
             </p>
-          </Card>
+          </button>
         </div>
 
-        {/* Repository, Timeline & Environmental Representation Strip */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
-          <Card padding="sm" className="space-y-2.5">
+        {/* Interactive Era Chart + Repository & Database Scope Transparency */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 pt-1">
+          <Card padding="sm" className="lg:col-span-5 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-[var(--text-primary)]">
+                Campaign Coverage by Era (Click bar to inspect)
+              </p>
+              <Badge tone="cyan">DB-Derived</Badge>
+            </div>
+            <div className="h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={trends.eraTimeline.map((b) => ({
+                    shortEra: b.era.includes('Multi-Year')
+                      ? 'Undated/Rev'
+                      : b.era.split(' (')[0],
+                    era: b.era,
+                    count: b.count,
+                  }))}
+                  margin={{ top: 8, right: 8, left: -18, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                  <XAxis
+                    dataKey="shortEra"
+                    interval={0}
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 10 }}
+                    axisLine={{ stroke: 'var(--border-strong)' }}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 10 }}
+                    axisLine={{ stroke: 'var(--border-strong)' }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'var(--bg-card)',
+                      borderColor: 'var(--border-strong)',
+                      color: 'var(--text-primary)',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                    }}
+                    formatter={(value) => [`${value ?? 0} records`, 'Indexed Studies']}
+                    labelFormatter={(_lbl, items) => {
+                      const p = items?.[0]?.payload as { era?: string } | undefined;
+                      return p?.era ?? '';
+                    }}
+                  />
+                  <Bar
+                    dataKey="count"
+                    fill="var(--accent-blue)"
+                    radius={[4, 4, 0, 0]}
+                    className="cursor-pointer"
+                    onClick={() => onNavigate('data')}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+
+          <Card padding="sm" className="lg:col-span-3 space-y-2.5">
             <p className="text-xs font-semibold text-[var(--text-primary)]">
               Repository Coverage
             </p>
             <div className="space-y-1.5">
               {trends.repositoryDistribution.map((repo) => (
-                <div key={repo.label} className="flex items-center justify-between text-xs">
-                  <span className="text-[var(--text-secondary)]">{repo.label}</span>
+                <button
+                  key={repo.label}
+                  type="button"
+                  onClick={() => onNavigate('sources')}
+                  className="w-full flex items-center justify-between text-xs hover:text-[var(--accent-blue)] transition-colors cursor-pointer"
+                >
+                  <span className="text-[var(--text-secondary)] hover:text-[var(--accent-blue)]">
+                    {repo.label}
+                  </span>
                   <span className="font-mono-tabular font-semibold text-[var(--text-primary)]">
                     {repo.count} {repo.count === 1 ? 'record' : 'records'}
                   </span>
-                </div>
+                </button>
               ))}
             </div>
           </Card>
 
-          <Card padding="sm" className="space-y-2.5">
-            <p className="text-xs font-semibold text-[var(--text-primary)]">
-              Campaign Timeline Eras
-            </p>
-            <div className="space-y-1.5">
-              {trends.eraTimeline.map((bucket) => (
-                <div key={bucket.era} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-[var(--text-secondary)] truncate">{bucket.era}</span>
-                  <span className="font-mono-tabular font-semibold text-[var(--accent-cyan)] shrink-0">
-                    {bucket.count}
-                  </span>
-                </div>
-              ))}
+          <Card padding="sm" className="lg:col-span-4 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-[var(--text-primary)]">
+                Database Snapshot &amp; Audit Scope
+              </p>
+              <Badge tone="neutral">{dbAudit.averageCompletenessPct}% avg. fields</Badge>
             </div>
-          </Card>
-
-          <Card padding="sm" className="space-y-2.5">
-            <p className="text-xs font-semibold text-[var(--text-primary)]">
-              Top Environmental Variables &amp; Provenance Note
+            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+              Source: <strong className="text-[var(--text-primary)]">{DOSSIER_METADATA.sourceDocumentTitle}</strong> ({stats.totalRecords} records, {dbAudit.duplicateIds.length} duplicate IDs).
             </p>
-            <div className="space-y-1.5">
-              {trends.variableCoverage.slice(0, 4).map((v) => (
+            <div className="space-y-1 pt-1 border-t border-[var(--border-subtle)]">
+              {trends.variableCoverage.slice(0, 3).map((v) => (
                 <div key={v.label} className="flex items-center justify-between text-xs">
                   <span className="text-[var(--text-secondary)] truncate">{v.label}</span>
                   <span className="font-mono-tabular font-semibold text-[var(--accent-blue)]">
@@ -308,7 +415,7 @@ export function HomeOverview({
               ))}
             </div>
             <p className="text-[11px] text-[var(--text-muted)] pt-1 border-t border-[var(--border-subtle)]">
-              Notice: Exact day-level publication dates are omitted where absent in the reviewed dossier; campaign windows reflect documented timeframes.
+              Static curated JSON snapshot; &ldquo;Recently Explored&rdquo; reflects local browser session navigation rather than live upstream repository edits.
             </p>
           </Card>
         </div>

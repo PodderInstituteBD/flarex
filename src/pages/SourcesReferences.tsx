@@ -35,6 +35,10 @@ import {
   filterReferences,
   ReferenceFilterCategory,
 } from '../utils/researchLogic';
+import {
+  LinkCheckState,
+  resolveResourceVerificationStatus,
+} from '../utils/sourceVerification';
 import { BookmarkedSourceEntry } from '../utils/workspaceStore';
 
 interface NtrsResult {
@@ -64,6 +68,8 @@ interface SourcesReferencesProps {
   onOpenInvestigation: (id: string) => void;
   bookmarkedSources?: BookmarkedSourceEntry[];
   onToggleBookmark?: (entry: Omit<BookmarkedSourceEntry, 'savedAt'>) => void;
+  onAttachNtrsDocument?: (doc: { title: string; sourceUrl: string; content: string }) => void;
+  onRecordClientError?: (source: string, message: string) => void;
 }
 
 const REFERENCE_FILTER_TABS: Array<{
@@ -83,12 +89,26 @@ export function SourcesReferences({
   onOpenInvestigation,
   bookmarkedSources = [],
   onToggleBookmark,
+  onAttachNtrsDocument,
+  onRecordClientError,
 }: SourcesReferencesProps) {
   const [ntrsQuery, setNtrsQuery] = useState('BASS-II microgravity combustion');
   const [ntrsLoading, setNtrsLoading] = useState(false);
   const [ntrsError, setNtrsError] = useState<string | null>(null);
   const [ntrsResults, setNtrsResults] = useState<NtrsResult[] | null>(null);
   const [ntrsCached, setNtrsCached] = useState(false);
+  const [downloadingNtrsId, setDownloadingNtrsId] = useState<number | null>(null);
+  const [ntrsTextStatus, setNtrsTextStatus] = useState<string | null>(null);
+
+  const [psiLoading, setPsiLoading] = useState(false);
+  const [psiError, setPsiError] = useState<string | null>(null);
+  const [psiBrowseData, setPsiBrowseData] = useState<{
+    prefix: string;
+    prefixes: string[];
+    objects: Array<{ key: string; sizeBytes: number; lastModified: string | null }>;
+    combustionFilesFound: boolean;
+    cached?: boolean;
+  } | null>(null);
 
   const [osdrLoading, setOsdrLoading] = useState(false);
   const [osdrError, setOsdrError] = useState<string | null>(null);
@@ -101,6 +121,75 @@ export function SourcesReferences({
   const [refCategory, setRefCategory] = useState<ReferenceFilterCategory>('ALL');
   const [refSearch, setRefSearch] = useState('');
 
+  const handleBrowsePsiOpen = async (prefix = '') => {
+    setPsiLoading(true);
+    setPsiError(null);
+    try {
+      const resp = await fetch(`/api/psi-open/browse?prefix=${encodeURIComponent(prefix)}`);
+      const data = (await resp.json()) as {
+        prefix?: string;
+        prefixes?: string[];
+        objects?: Array<{ key: string; sizeBytes: number; lastModified: string | null }>;
+        combustionFilesFound?: boolean;
+        cached?: boolean;
+        message?: string;
+      };
+      if (!resp.ok) {
+        const msg = data.message || `HTTP ${resp.status} browsing NASA PSI AWS S3`;
+        setPsiError(msg);
+        onRecordClientError?.('NASA_PSI_OPEN', msg);
+      } else {
+        setPsiBrowseData({
+          prefix: data.prefix ?? '',
+          prefixes: data.prefixes ?? [],
+          objects: data.objects ?? [],
+          combustionFilesFound: Boolean(data.combustionFilesFound),
+          cached: data.cached,
+        });
+      }
+    } catch {
+      const msg = 'Network error contacting /api/psi-open/browse.';
+      setPsiError(msg);
+      onRecordClientError?.('NASA_PSI_OPEN', msg);
+    } finally {
+      setPsiLoading(false);
+    }
+  };
+
+  const handleFetchNtrsFullText = async (id: number, title: string) => {
+    setDownloadingNtrsId(id);
+    setNtrsTextStatus(null);
+    try {
+      const resp = await fetch(`/api/ntrs/download?id=${id}`);
+      const data = (await resp.json()) as {
+        sourceUrl?: string;
+        byteLength?: number;
+        content?: string;
+        message?: string;
+      };
+      if (!resp.ok || !data.content) {
+        const msg = data.message || `No public full-text .txt available for NTRS ${id}.`;
+        setNtrsTextStatus(msg);
+        onRecordClientError?.('NASA_NTRS_DOWNLOAD', msg);
+        return;
+      }
+      setNtrsTextStatus(
+        `File successfully retrieved: NTRS ${id} (${((data.byteLength ?? data.content.length) / 1024).toFixed(1)} KB .txt). Sending to AI Mode B...`
+      );
+      onAttachNtrsDocument?.({
+        title: `${title} (NTRS ${id})`,
+        sourceUrl: data.sourceUrl ?? `https://ntrs.nasa.gov/citations/${id}`,
+        content: data.content,
+      });
+    } catch {
+      const msg = `Network error downloading NTRS ${id} full text.`;
+      setNtrsTextStatus(msg);
+      onRecordClientError?.('NASA_NTRS_DOWNLOAD', msg);
+    } finally {
+      setDownloadingNtrsId(null);
+    }
+  };
+
   // Module 1 Unified NASA Research Discovery Engine state
   const [discQuery, setDiscQuery] = useState('');
   const [discRepo, setDiscRepo] = useState<NasaRepositoryId | 'ALL'>('ALL');
@@ -110,8 +199,9 @@ export function SourcesReferences({
   const [discEvidence, setDiscEvidence] = useState('ALL');
   const [discAvailability, setDiscAvailability] = useState('ALL');
   const [expandedResourceId, setExpandedResourceId] = useState<string | null>(null);
+  const [batchChecking, setBatchChecking] = useState(false);
   const [linkStatusMap, setLinkStatusMap] = useState<
-    Record<string, { ok: boolean; status: number | null; note?: string; checking?: boolean }>
+    Record<string, LinkCheckState>
   >({});
 
   const discoveryIndex = useMemo(
@@ -178,13 +268,18 @@ export function SourcesReferences({
         body: JSON.stringify({ url: item.url }),
       });
       const data = (await resp.json()) as {
-        results?: Array<{ url: string; ok: boolean; status: number | null; note?: string }>;
+        results?: Array<{ url: string; ok: boolean; status: number | null; note?: string; checkedAt?: string }>;
       };
       const hit = data.results?.[0];
       if (hit) {
         setLinkStatusMap((prev) => ({
           ...prev,
-          [item.url]: { ok: hit.ok, status: hit.status, note: hit.note },
+          [item.url]: {
+            ok: hit.ok,
+            status: hit.status,
+            note: hit.note,
+            checkedAt: hit.checkedAt,
+          },
         }));
       }
     } catch {
@@ -192,6 +287,43 @@ export function SourcesReferences({
         ...prev,
         [item.url]: { ok: false, status: null, note: 'Check failed' },
       }));
+    }
+  };
+
+  const handleBatchVerifyVisible = async () => {
+    if (batchChecking) return;
+    const targets = filteredDiscovery
+      .slice(0, 10)
+      .map((d) => d.url)
+      .filter((u) => u.startsWith('https://'));
+    if (targets.length === 0) return;
+
+    setBatchChecking(true);
+    try {
+      const resp = await fetch('/api/check-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: targets }),
+      });
+      const data = (await resp.json()) as {
+        results?: Array<{ url: string; ok: boolean; status: number | null; note?: string; checkedAt?: string }>;
+      };
+      if (resp.ok && data.results) {
+        setLinkStatusMap((prev) => {
+          const next = { ...prev };
+          for (const hit of data.results ?? []) {
+            next[hit.url] = {
+              ok: hit.ok,
+              status: hit.status,
+              note: hit.note,
+              checkedAt: hit.checkedAt,
+            };
+          }
+          return next;
+        });
+      }
+    } finally {
+      setBatchChecking(false);
     }
   };
 
@@ -288,9 +420,20 @@ export function SourcesReferences({
               Discover publications, dataset metadata, DOIs, and repository links across NASA PSI, NTRS, PSI AWS Open Data, OSDR, and peer-reviewed journals.
             </p>
           </div>
-          <span className="font-mono-tabular text-xs text-[var(--text-muted)]">
-            {filteredDiscovery.length} of {discoveryIndex.length} indexed resources
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-mono-tabular text-xs text-[var(--text-muted)]">
+              {filteredDiscovery.length} of {discoveryIndex.length} indexed resources
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={batchChecking}
+              onClick={() => void handleBatchVerifyVisible()}
+            >
+              {batchChecking ? 'Verifying Visible URLs…' : 'Verify Visible Sources'}
+            </Button>
+          </div>
         </div>
 
         <Card padding="sm" className="space-y-3">
@@ -401,11 +544,15 @@ export function SourcesReferences({
             const isExpanded = expandedResourceId === item.id;
             const isBookmarked = bookmarkedUrlSet.has(item.url);
             const linkCheck = linkStatusMap[item.url];
+            const verification = resolveResourceVerificationStatus(item.url, linkCheck);
             return (
               <Card key={item.id} padding="sm" className="space-y-2.5 flex flex-col justify-between">
                 <div className="space-y-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                    <Badge tone="cyan">{item.repositoryLabel}</Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone="cyan">{item.repositoryLabel}</Badge>
+                      <Badge tone={verification.tone}>{verification.status}</Badge>
+                    </div>
                     <span className="font-mono-tabular text-[var(--text-muted)]">
                       {item.publicationDateDisplay}
                     </span>
@@ -426,7 +573,7 @@ export function SourcesReferences({
                         {item.doi ? ` · DOI ${item.doi}` : ''}
                       </p>
                       <p className="text-[11px] text-[var(--text-muted)]">
-                        Availability: {item.dataAvailabilityLabel}
+                        Availability: {item.dataAvailabilityLabel} · Verification: {verification.detail}
                       </p>
                     </div>
                   )}
@@ -741,21 +888,166 @@ export function SourcesReferences({
                         </p>
                       )}
                     </div>
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent-blue)] hover:underline shrink-0"
-                    >
-                      <span>View Citation</span>
-                      <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-                    </a>
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {item.id && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={downloadingNtrsId === item.id}
+                          onClick={() =>
+                            void handleFetchNtrsFullText(item.id as number, item.title)
+                          }
+                        >
+                          <FileText className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>
+                            {downloadingNtrsId === item.id
+                              ? 'Retrieving .txt…'
+                              : 'Fetch Full Text (.txt)'}
+                          </span>
+                        </Button>
+                      )}
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent-blue)] hover:underline"
+                      >
+                        <span>View Citation</span>
+                        <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                      </a>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
+            {ntrsTextStatus && (
+              <p className="text-xs text-[var(--accent-cyan)]">{ntrsTextStatus}</p>
+            )}
           </div>
         )}
+
+        {/* Quick Verified NTRS Full-Text Retrieve Strip */}
+        <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-[var(--text-secondary)]">
+            Direct verified NTRS full-text retrieval (public ASCII <code>.txt</code> manuscripts):
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={downloadingNtrsId === 20160000593}
+              onClick={() =>
+                void handleFetchNtrsFullText(
+                  20160000593,
+                  'BASS-II Solid Fuel Microgravity Flame Spread (NASA/TM)'
+                )
+              }
+            >
+              Retrieve BASS-II (20160000593)
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={downloadingNtrsId === 20180005168}
+              onClick={() =>
+                void handleFetchNtrsFullText(
+                  20180005168,
+                  'Saffire-I Large-Scale Spacecraft Fire Experiment'
+                )
+              }
+            >
+              Retrieve Saffire (20180005168)
+            </Button>
+          </div>
+        </div>
+
+        {/* Live NASA PSI Open Data AWS S3 Bucket Browser */}
+        <div className="pt-4 border-t border-[var(--border-subtle)] space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                NASA PSI Open Data Mirror (AWS S3 Bucket Inspection)
+              </h3>
+              <p className="text-xs text-[var(--text-secondary)]">
+                Inspects public bucket <code>https://nasa-psi.s3.us-west-2.amazonaws.com/</code> via ListObjectsV2 to verify which investigations have unauthenticated open-data files versus gated portal datasets.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {psiBrowseData && psiBrowseData.prefix && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={psiLoading}
+                  onClick={() => void handleBrowsePsiOpen('')}
+                >
+                  Root Bucket
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={psiLoading}
+                onClick={() => void handleBrowsePsiOpen('')}
+              >
+                {psiLoading ? 'Browsing AWS S3…' : 'Browse Public Bucket'}
+              </Button>
+            </div>
+          </div>
+
+          {psiError && <ErrorState title="NASA PSI Open Data Unavailable" message={psiError} />}
+
+          {psiBrowseData && (
+            <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono-tabular text-[var(--text-primary)]">
+                  s3://nasa-psi/{psiBrowseData.prefix || '(root)'}
+                  {psiBrowseData.cached ? ' · cached' : ''}
+                </span>
+                <Badge tone={psiBrowseData.combustionFilesFound ? 'success' : 'warning'}>
+                  {psiBrowseData.combustionFilesFound
+                    ? 'Combustion records detected'
+                    : '0 combustion folders in public AWS S3'}
+                </Badge>
+              </div>
+              {psiBrowseData.prefixes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {psiBrowseData.prefixes.map((pfx) => (
+                    <button
+                      key={pfx}
+                      type="button"
+                      onClick={() => void handleBrowsePsiOpen(pfx)}
+                      className="px-2 py-1 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] font-mono-tabular text-[var(--accent-blue)] hover:border-[var(--accent-blue)] cursor-pointer"
+                    >
+                      📁 {pfx}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {psiBrowseData.objects.length > 0 && (
+                <ul className="space-y-1 max-h-36 overflow-y-auto font-mono-tabular text-[11px]">
+                  {psiBrowseData.objects.slice(0, 20).map((obj) => (
+                    <li key={obj.key} className="flex items-center justify-between gap-2">
+                      <span className="truncate text-[var(--text-secondary)]">{obj.key}</span>
+                      <span className="text-[var(--text-muted)] shrink-0">
+                        {(obj.sizeBytes / 1024).toFixed(1)} KB
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!psiBrowseData.combustionFilesFound && !psiBrowseData.prefix && (
+                <p className="text-[11px] text-[var(--status-warning)]">
+                  Empirical finding: The public AWS S3 mirror currently hosts only <code>DSI/</code>, <code>OASIS/</code>, and <code>pk4/</code>. Combustion datasets (BASS-II, Saffire, SPICE) require interactive access at <code>https://psi.nasa.gov/physci/repo</code>.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Empirical NASA OSDR Scope Verification */}
         <div className="pt-4 border-t border-[var(--border-subtle)] space-y-2.5">
@@ -841,49 +1133,59 @@ export function SourcesReferences({
           Primary Repositories &amp; Bundled Source Assets
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {OFFICIAL_RESOURCES.map((res) => (
-            <Card key={res.id} as="article" className="flex flex-col justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Badge tone="neutral">{res.accessType}</Badge>
-                  {(res.id === 'nasa-ntrs' || res.id === 'nasa-osdr') && (
-                    <Badge tone="success">API Verified 2026-11-13</Badge>
-                  )}
+          {OFFICIAL_RESOURCES.map((res) => {
+            const portalMetaRetrieved =
+              (res.id === 'nasa-ntrs' && Boolean(ntrsResults && ntrsResults.length > 0)) ||
+              (res.id === 'nasa-osdr' && Boolean(osdrData));
+            const portalVerification = resolveResourceVerificationStatus(
+              res.url,
+              linkStatusMap[res.url],
+              { metadataRetrieved: portalMetaRetrieved }
+            );
+            return (
+              <Card key={res.id} as="article" className="flex flex-col justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Badge tone="neutral">{res.accessType}</Badge>
+                    <Badge tone={portalVerification.tone}>
+                      {portalVerification.status}
+                    </Badge>
+                  </div>
+                  <h3 className="font-display text-[16px] font-semibold text-[var(--text-primary)]">
+                    {res.name}
+                  </h3>
+                  <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                    {res.role}
+                  </p>
+                  <p className="text-xs text-[var(--status-warning)] leading-relaxed">
+                    {res.distinctionNote}
+                  </p>
                 </div>
-                <h3 className="font-display text-[16px] font-semibold text-[var(--text-primary)]">
-                  {res.name}
-                </h3>
-                <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-                  {res.role}
-                </p>
-                <p className="text-xs text-[var(--status-warning)] leading-relaxed">
-                  {res.distinctionNote}
-                </p>
-              </div>
-              <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap items-center gap-3">
-                <a
-                  href={res.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-blue)] hover:underline"
-                >
-                  <span>Open {res.shortName}</span>
-                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-                </a>
-                {res.apiUrl && (
+                <div className="pt-3 border-t border-[var(--border-subtle)] flex flex-wrap items-center gap-3">
                   <a
-                    href={res.apiUrl}
+                    href={res.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] hover:text-[var(--accent-blue)]"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--accent-blue)] hover:underline"
                   >
-                    <span>NTRS Public API</span>
-                    <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                    <span>Open {res.shortName}</span>
+                    <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
                   </a>
-                )}
-              </div>
-            </Card>
-          ))}
+                  {res.apiUrl && (
+                    <a
+                      href={res.apiUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)] hover:text-[var(--accent-blue)]"
+                    >
+                      <span>NTRS Public API</span>
+                      <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                    </a>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       </section>
 

@@ -17,6 +17,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState, NoticeBanner } from '../components/ui/States';
 import { InvestigationRecord } from '../types/research';
 import { analyzeCrossInvestigations } from '../utils/crossInvestigation';
+import { analyzeExperimentalConditions } from '../utils/experimentalConditions';
 import { buildComparisonRows } from '../utils/researchLogic';
 
 interface InvestigationComparisonProps {
@@ -53,6 +54,11 @@ export function InvestigationComparison({
 
   const crossAnalysis = useMemo(
     () => analyzeCrossInvestigations(selectedRecords),
+    [selectedRecords]
+  );
+
+  const conditionReport = useMemo(
+    () => analyzeExperimentalConditions(selectedRecords),
     [selectedRecords]
   );
 
@@ -314,6 +320,62 @@ export function InvestigationComparison({
                   ))}
                 </ul>
               </div>
+            </div>
+          </Card>
+
+          {/* Module 9: Experimental Condition Intelligence (8-Parameter Matrix) */}
+          <Card padding="md" className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
+                  Experimental Condition Intelligence (8-Parameter Matrix)
+                </h2>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  {conditionReport.guidanceNote}
+                </p>
+              </div>
+              <Badge
+                tone={
+                  conditionReport.overallStatus === 'Compatible'
+                    ? 'success'
+                    : conditionReport.overallStatus === 'Incompatible'
+                    ? 'danger'
+                    : 'warning'
+                }
+              >
+                Overall: {conditionReport.overallStatus}
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 text-xs">
+              {conditionReport.dimensions.map((dim) => (
+                <div
+                  key={dim.dimension}
+                  className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1.5 min-w-0"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="font-semibold text-[var(--text-primary)]">
+                      {dim.dimension}
+                    </span>
+                    <Badge
+                      tone={
+                        dim.status === 'Compatible'
+                          ? 'success'
+                          : dim.status === 'Incompatible'
+                          ? 'danger'
+                          : dim.status === 'Partially comparable'
+                          ? 'cyan'
+                          : 'neutral'
+                      }
+                    >
+                      {dim.status}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                    {dim.summary}
+                  </p>
+                </div>
+              ))}
             </div>
           </Card>
 

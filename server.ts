@@ -2,10 +2,15 @@ import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
 import express, { NextFunction, Request, Response } from 'express';
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { GeminiAiProvider } from './server/geminiProvider.ts';
 import type { InvestigationRecord } from './src/types/research.ts';
+import { classifyAiErrorStatus } from './src/utils/aiReliability.ts';
 import { validateResearchDatabase } from './src/utils/databaseValidator.ts';
-import { retrieveRelevantInvestigations } from './src/utils/researchLogic.ts';
+import {
+  buildRetrievedSourceRefs,
+  runAdvancedRagRetrieval,
+  validateCitations,
+} from './src/utils/ragPipeline.ts';
 
 const PORT = Number(process.env.PORT || 3000);
 function resolveGeminiModel(): string {
@@ -16,6 +21,7 @@ function resolveGeminiModel(): string {
   return 'gemini-4-hydrogen';
 }
 const GEMINI_MODEL = resolveGeminiModel();
+const geminiProvider = new GeminiAiProvider(GEMINI_MODEL);
 
 interface RawDatabaseFile {
   databaseTitle: string;
@@ -24,25 +30,36 @@ interface RawDatabaseFile {
   records: InvestigationRecord[];
 }
 
-function loadResearchRecords(): InvestigationRecord[] {
+function loadResearchDatabase(): RawDatabaseFile {
   const dbPath = path.join(process.cwd(), 'src', 'data', 'researchDatabase.json');
   const raw = fs.readFileSync(dbPath, 'utf-8');
-  const parsed = JSON.parse(raw) as RawDatabaseFile;
-  return parsed.records ?? [];
+  return JSON.parse(raw) as RawDatabaseFile;
 }
 
-const researchRecords = loadResearchRecords();
+const rawDatabase = loadResearchDatabase();
+const researchRecords = rawDatabase.records ?? [];
 const dbAudit = validateResearchDatabase(researchRecords);
 
-// Simple in-memory TTL cache for public NASA repository lookups (NTRS & OSDR)
+// Simple in-memory TTL cache for public NASA repository lookups (NTRS, OSDR, PSI AWS S3)
 interface ApiCacheEntry {
   expiresAt: number;
   data: unknown;
 }
 const ntrsCache = new Map<string, ApiCacheEntry>();
 const osdrCache = new Map<string, ApiCacheEntry>();
+const psiOpenCache = new Map<string, ApiCacheEntry>();
 const urlCheckCache = new Map<string, ApiCacheEntry>();
 const NASA_CACHE_TTL_MS = 15 * 60 * 1000;
+
+function extractXmlTags(xml: string, tag: string): string[] {
+  const out: string[] = [];
+  const regex = new RegExp(`<${tag}>([^<]*)</${tag}>`, 'g');
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(xml)) !== null) {
+    out.push(match[1].trim());
+  }
+  return out;
+}
 
 function isSafePublicHttpsUrl(rawUrl: string): { valid: boolean; parsed?: URL } {
   try {
@@ -165,16 +182,271 @@ async function createServer() {
   app.use(express.static(path.join(process.cwd(), 'public')));
 
   app.get('/api/health', (_req, res) => {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    const isPlaceholder = !apiKey || apiKey === 'MY_GEMINI_API_KEY';
     res.json({
       ok: true,
-      aiConfigured: !isPlaceholder,
+      aiConfigured: geminiProvider.isConfigured(),
       model: GEMINI_MODEL,
+      databaseTitle: rawDatabase.databaseTitle,
+      sourceDocumentTitle: rawDatabase.sourceDocumentTitle,
       recordCount: researchRecords.length,
+      withPsiIdCount: researchRecords.filter((r) => Boolean(r.psiId)).length,
+      withRawDatasetCount: researchRecords.filter((r) => r.hasRawNumericalDataset).length,
       integrityPassed: dbAudit.allPassedIntegrityChecks,
       averageCompletenessPct: dbAudit.averageCompletenessPct,
     });
+  });
+
+  app.get('/api/system-health', (_req, res) => {
+    res.json({
+      ok: true,
+      serverTimestamp: new Date().toISOString(),
+      database: {
+        title: rawDatabase.databaseTitle,
+        totalRecords: dbAudit.totalRecords,
+        integrityPassed: dbAudit.allPassedIntegrityChecks,
+        duplicateIdCount: dbAudit.duplicateIds.length,
+        averageCompletenessPct: dbAudit.averageCompletenessPct,
+        withPsiIdCount: researchRecords.filter((r) => Boolean(r.psiId)).length,
+        withRawDatasetCount: researchRecords.filter((r) => r.hasRawNumericalDataset).length,
+      },
+      aiProvider: {
+        configured: geminiProvider.isConfigured(),
+        telemetry: geminiProvider.getTelemetry(),
+      },
+      nasaIntegration: {
+        ntrsCacheEntries: ntrsCache.size,
+        osdrCacheEntries: osdrCache.size,
+        psiOpenCacheEntries: psiOpenCache.size,
+        urlCheckCacheEntries: urlCheckCache.size,
+      },
+      recentErrors: geminiProvider.getRecentErrors(),
+    });
+  });
+
+  app.get('/api/psi-open/browse', async (req, res) => {
+    const rawPrefix = typeof req.query.prefix === 'string' ? req.query.prefix.trim() : '';
+    if (rawPrefix.length > 120 || /[^a-zA-Z0-9_./-]/.test(rawPrefix)) {
+      res.status(400).json({
+        error: 'INVALID_PREFIX',
+        message: 'Prefix must contain only safe alphanumeric, /, -, _, or . characters.',
+      });
+      return;
+    }
+
+    const cacheKey = `prefix:${rawPrefix}`;
+    const cached = psiOpenCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      res.json({ cached: true, ...((cached.data as object) || {}) });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+
+    try {
+      const s3Url = `https://nasa-psi.s3.us-west-2.amazonaws.com/?list-type=2&delimiter=/&max-keys=50${
+        rawPrefix ? `&prefix=${encodeURIComponent(rawPrefix)}` : ''
+      }`;
+      const upstream = await fetch(s3Url, { signal: controller.signal });
+      clearTimeout(timer);
+
+      if (!upstream.ok) {
+        geminiProvider.recordExternalError(
+          'NASA_PSI_OPEN',
+          `HTTP_${upstream.status}`,
+          `NASA PSI Open AWS S3 returned HTTP ${upstream.status}`
+        );
+        res.status(502).json({
+          error: 'PSI_OPEN_UPSTREAM_ERROR',
+          message: `NASA PSI AWS Open Data returned HTTP ${upstream.status}.`,
+        });
+        return;
+      }
+
+      const xml = await upstream.text();
+      const commonPrefixes = extractXmlTags(xml, 'Prefix').filter(
+        (p) => p !== rawPrefix && p.endsWith('/')
+      );
+      const objects: Array<{ key: string; sizeBytes: number; lastModified: string | null }> = [];
+      const contentRegex = /<Contents>([\s\S]*?)<\/Contents>/g;
+      let match: RegExpExecArray | null;
+      while ((match = contentRegex.exec(xml)) !== null) {
+        const block = match[1];
+        const key = extractXmlTags(block, 'Key')[0];
+        const sizeStr = extractXmlTags(block, 'Size')[0];
+        const lastMod = extractXmlTags(block, 'LastModified')[0] ?? null;
+        if (key) {
+          objects.push({
+            key,
+            sizeBytes: Number(sizeStr) || 0,
+            lastModified: lastMod,
+          });
+        }
+      }
+
+      const dataPayload = {
+        bucket: 'nasa-psi',
+        registryUrl: 'https://registry.opendata.aws/nasa-psi/',
+        s3BaseUrl: 'https://nasa-psi.s3.us-west-2.amazonaws.com/',
+        prefix: rawPrefix,
+        prefixes: commonPrefixes,
+        objects: objects.slice(0, 50),
+        combustionFilesFound: commonPrefixes
+          .concat(objects.map((o) => o.key))
+          .some((k) => /bass|saffire|flex|acme|spice|combustion|same|daft|sofie/i.test(k)),
+      };
+
+      if (psiOpenCache.size >= 30) {
+        const oldest = psiOpenCache.keys().next().value;
+        if (oldest) psiOpenCache.delete(oldest);
+      }
+      psiOpenCache.set(cacheKey, {
+        expiresAt: Date.now() + NASA_CACHE_TTL_MS,
+        data: dataPayload,
+      });
+
+      res.json({ cached: false, ...dataPayload });
+    } catch {
+      clearTimeout(timer);
+      geminiProvider.recordExternalError(
+        'NASA_PSI_OPEN',
+        'PSI_OPEN_UNREACHABLE',
+        'Failed or timed out reaching NASA PSI AWS Open Data S3 bucket.'
+      );
+      res.status(504).json({
+        error: 'PSI_OPEN_UNREACHABLE',
+        message: 'Unable to reach NASA PSI Open Data AWS S3 bucket.',
+      });
+    }
+  });
+
+  app.get('/api/ntrs/citation/:id', async (req, res) => {
+    const id = req.params.id?.trim() ?? '';
+    if (!/^\d{6,14}$/.test(id)) {
+      res.status(400).json({
+        error: 'INVALID_NTRS_ID',
+        message: 'NTRS citation ID must be a 6 to 14 digit numeric identifier.',
+      });
+      return;
+    }
+
+    const cacheKey = `cit:${id}`;
+    const cached = ntrsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      res.json({ cached: true, citation: cached.data });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    try {
+      const upstream = await fetch(`https://ntrs.nasa.gov/api/citations/${id}`, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!upstream.ok) {
+        res.status(upstream.status === 404 ? 404 : 502).json({
+          error: 'NTRS_CITATION_ERROR',
+          message: `NTRS returned HTTP ${upstream.status} for citation ${id}.`,
+        });
+        return;
+      }
+      const data = (await upstream.json()) as {
+        id?: number;
+        title?: string;
+        abstract?: string;
+        downloads?: Array<{
+          draft?: boolean;
+          name?: string;
+          links?: { fulltext?: string; pdf?: string };
+        }>;
+      };
+      const normalized = {
+        id: data.id ?? Number(id),
+        title: data.title ?? `NTRS ${id}`,
+        abstract: data.abstract ?? null,
+        downloads: (data.downloads ?? []).map((d) => ({
+          name: d.name ?? `NTRS_${id}`,
+          hasFullText: Boolean(d.links?.fulltext),
+          hasPdf: Boolean(d.links?.pdf),
+          fullTextUrl: d.links?.fulltext ? `https://ntrs.nasa.gov${d.links.fulltext}` : null,
+          pdfUrl: d.links?.pdf ? `https://ntrs.nasa.gov${d.links.pdf}` : null,
+        })),
+      };
+      ntrsCache.set(cacheKey, {
+        expiresAt: Date.now() + NASA_CACHE_TTL_MS,
+        data: normalized,
+      });
+      res.json({ cached: false, citation: normalized });
+    } catch {
+      clearTimeout(timer);
+      geminiProvider.recordExternalError('NASA_NTRS', 'NTRS_CITATION_TIMEOUT', `Timeout fetching NTRS ${id}`);
+      res.status(504).json({
+        error: 'NTRS_UNREACHABLE',
+        message: 'Timed out contacting NASA NTRS citation endpoint.',
+      });
+    }
+  });
+
+  app.get('/api/ntrs/download', async (req, res) => {
+    const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
+    if (!/^\d{6,14}$/.test(id)) {
+      res.status(400).json({
+        error: 'INVALID_NTRS_ID',
+        message: 'Query parameter "id" must be a 6 to 14 digit NTRS ID.',
+      });
+      return;
+    }
+
+    const cacheKey = `txt:${id}`;
+    const cached = ntrsCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      res.json({ cached: true, ...((cached.data as object) || {}) });
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const targetUrl = `https://ntrs.nasa.gov/api/citations/${id}/downloads/${id}.txt`;
+      const upstream = await fetch(targetUrl, { signal: controller.signal });
+      clearTimeout(timer);
+
+      if (!upstream.ok) {
+        res.status(upstream.status === 404 ? 404 : 502).json({
+          error: 'NTRS_TEXT_UNAVAILABLE',
+          message: `Public full-text .txt file is not available for NTRS ${id} (HTTP ${upstream.status}). Open https://ntrs.nasa.gov/citations/${id} directly.`,
+        });
+        return;
+      }
+
+      const rawText = await upstream.text();
+      const maxBytes = 2 * 1024 * 1024;
+      const truncated = rawText.length > maxBytes;
+      const text = truncated ? rawText.slice(0, maxBytes) : rawText;
+
+      const payload = {
+        id: Number(id),
+        sourceUrl: targetUrl,
+        citationUrl: `https://ntrs.nasa.gov/citations/${id}`,
+        byteLength: rawText.length,
+        truncated,
+        content: text,
+      };
+      ntrsCache.set(cacheKey, {
+        expiresAt: Date.now() + NASA_CACHE_TTL_MS,
+        data: payload,
+      });
+      res.json({ cached: false, ...payload });
+    } catch {
+      clearTimeout(timer);
+      geminiProvider.recordExternalError('NASA_NTRS', 'NTRS_DOWNLOAD_FAILED', `Failed downloading NTRS ${id}.txt`);
+      res.status(504).json({
+        error: 'NTRS_DOWNLOAD_UNREACHABLE',
+        message: 'Failed or timed out downloading NTRS full-text document.',
+      });
+    }
   });
 
   app.get('/api/ntrs/search', async (req, res) => {
@@ -493,6 +765,8 @@ async function createServer() {
       history?: unknown;
       focusInvestigationId?: unknown;
       analysisMode?: unknown;
+      answerMode?: unknown;
+      documentContext?: unknown;
     };
 
     if (typeof body.message !== 'string') {
@@ -512,31 +786,48 @@ async function createServer() {
       return;
     }
 
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+    if (!geminiProvider.isConfigured()) {
       res.status(503).json({
         error: 'GEMINI_API_KEY_MISSING',
         message:
-          'GEMINI_API_KEY is not configured on the server. Add GEMINI_API_KEY in Settings > Secrets (or .env) to enable FLAREX Research Intelligence. All local investigation exploration, comparison, and data audit tools remain fully functional.',
+          'GEMINI_API_KEY is not configured on the server. Add GEMINI_API_KEY in Settings > Secrets (or .env) to enable live Gemini synthesis. Use Local Brief Mode or FLAREX investigation tools immediately.',
       });
       return;
     }
 
-    // Retrieve only relevant records (bounded context)
-    let relevantRecords = retrieveRelevantInvestigations(
-      question,
-      researchRecords,
-      4
-    );
+    const answerMode =
+      body.answerMode === 'document' ? 'document' : 'grounded';
 
-    if (typeof body.focusInvestigationId === 'string' && body.focusInvestigationId) {
-      const focused = researchRecords.find(
-        (r) => r.id === body.focusInvestigationId
-      );
-      if (focused && !relevantRecords.some((r) => r.id === focused.id)) {
-        relevantRecords = [focused, ...relevantRecords.slice(0, 3)];
-      }
+    let docTitle: string | undefined;
+    let docSourceUrl: string | undefined;
+    let docExcerpt: string | undefined;
+    if (
+      body.documentContext &&
+      typeof body.documentContext === 'object' &&
+      typeof (body.documentContext as { excerpt?: unknown }).excerpt === 'string'
+    ) {
+      const dc = body.documentContext as {
+        title?: unknown;
+        sourceUrl?: unknown;
+        excerpt: string;
+      };
+      docTitle = typeof dc.title === 'string' ? dc.title.slice(0, 180) : 'Attached Scientific Document';
+      docSourceUrl = typeof dc.sourceUrl === 'string' ? dc.sourceUrl.slice(0, 240) : undefined;
+      docExcerpt = dc.excerpt.trim().slice(0, 5000);
     }
+
+    const focusId =
+      typeof body.focusInvestigationId === 'string' && body.focusInvestigationId
+        ? body.focusInvestigationId
+        : undefined;
+
+    const rag = runAdvancedRagRetrieval(question, researchRecords, {
+      maxResults: 4,
+      focusInvestigationId: focusId,
+      documentTitle: docTitle,
+    });
+    const relevantRecords = rag.selectedRecords;
+    const queryClassification = rag.diagnostics.classification;
 
     const modeHintMap: Record<string, string> = {
       concept: 'Explain experimental concepts, methodology, hardware, and documented findings cleanly for students and researchers.',
@@ -548,7 +839,16 @@ async function createServer() {
     const modeInstruction = modeHintMap[modeKey] ?? modeHintMap.concept;
 
     const contextBlock = buildCompactContext(relevantRecords);
-    const promptInput = `ANALYSIS MODE (${modeKey}): ${modeInstruction}\n\nUSER QUESTION:\n${question}\n\nRETRIEVED RELEVANT DOSSIER RECORDS (${relevantRecords.length} of ${researchRecords.length} total records):\n${contextBlock}`;
+    const docSection =
+      answerMode === 'document' && docExcerpt
+        ? `\n\nATTACHED SOURCE DOCUMENT FOR DOCUMENT ANALYSIS MODE (${docTitle}${
+            docSourceUrl ? ` | Origin: ${docSourceUrl}` : ''
+          }):\n${docExcerpt}`
+        : '';
+
+    const promptInput = `ANSWER MODE: ${
+      answerMode === 'document' ? 'DOCUMENT_ANALYSIS' : 'GROUNDED_RESEARCH'
+    }\nQUERY CLASSIFICATION: ${queryClassification.label} (${queryClassification.strategyHint})\nANALYSIS MODE (${modeKey}): ${modeInstruction}\n\nUSER QUESTION:\n${question}\n\nRETRIEVED RELEVANT DOSSIER RECORDS (${relevantRecords.length} of ${researchRecords.length} total records):\n${contextBlock}${docSection}`;
 
     const sanitizedHistory = Array.isArray(body.history)
       ? body.history
@@ -564,110 +864,61 @@ async function createServer() {
           .slice(-6)
           .map((turn) => ({
             role: turn.role,
-            parts: [{ text: turn.text.slice(0, 1200) }],
+            text: turn.text.slice(0, 1200),
           }))
       : [];
 
+    const requestAbortController = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) {
+        requestAbortController.abort();
+      }
+    });
+
     try {
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          },
-        },
+      const result = await geminiProvider.generate({
+        systemInstruction: FLAREX_SYSTEM_INSTRUCTION,
+        history: sanitizedHistory,
+        prompt: promptInput,
+        timeoutMs: 30_000,
+        signal: requestAbortController.signal,
       });
 
-      const contents = [
-        ...sanitizedHistory,
-        { role: 'user' as const, parts: [{ text: promptInput }] },
-      ];
+      const retrievedRefs = buildRetrievedSourceRefs(relevantRecords);
+      const citationValidation = validateCitations(
+        result.text,
+        retrievedRefs,
+        researchRecords
+      );
 
-      const response = await Promise.race([
-        ai.models.generateContent({
-          model: GEMINI_MODEL,
-          contents,
-          config: {
-            systemInstruction: FLAREX_SYSTEM_INSTRUCTION,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          },
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('GEMINI_TIMEOUT')), 25_000)
-        ),
-      ]);
-
-      const answerText = (response.text ?? '').trim();
-
-      if (!answerText) {
+      res.json({
+        answer: result.text,
+        model: result.model,
+        providerName: result.providerName,
+        latencyMs: result.latencyMs,
+        attempts: result.attempts,
+        answerMode,
+        queryClassification,
+        retrievedSources: retrievedRefs,
+        ragDiagnostics: rag.diagnostics,
+        citationValidation,
+      });
+    } catch (err: unknown) {
+      if (requestAbortController.signal.aborted && res.writableEnded) {
+        return;
+      }
+      const classified = classifyAiErrorStatus(err);
+      if (err instanceof Error && err.message === 'EMPTY_AI_RESPONSE') {
         res.status(502).json({
           error: 'EMPTY_AI_RESPONSE',
           message:
-            'The Gemini model returned an empty response. Please rephrase your question or retry.',
+            'The Gemini model returned an empty response. Please rephrase your question or switch to Local Brief Mode.',
         });
         return;
       }
-
-      res.json({
-        answer: answerText,
-        model: GEMINI_MODEL,
-        retrievedSources: relevantRecords.map((r) => ({
-          id: r.id,
-          shortName: r.shortName,
-          name: r.name,
-          evidenceType: r.evidenceType,
-          psiId: r.psiId,
-          sourceUrl: r.sourceUrl,
-        })),
-      });
-    } catch (err: unknown) {
-      const errorObj = err as { status?: number; message?: string };
-      const msg = errorObj?.message ?? 'Unknown Gemini API error';
-      const status = errorObj?.status;
-
-      if (msg === 'GEMINI_TIMEOUT') {
-        res.status(504).json({
-          error: 'GEMINI_TIMEOUT',
-          message:
-            'The Gemini API request timed out after 25 seconds. Please retry or use FLAREX local search and comparison tools.',
-        });
-        return;
-      }
-
-      if (status === 429 || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
-        res.status(429).json({
-          error: 'QUOTA_EXHAUSTED',
-          message:
-            'Gemini API quota is exhausted (429 RESOURCE_EXHAUSTED). Please wait a moment and retry, or check quota in Settings > Secrets.',
-        });
-        return;
-      }
-
-      if (
-        status === 403 ||
-        status === 401 ||
-        msg.includes('PERMISSION_DENIED') ||
-        msg.includes('API_KEY_INVALID')
-      ) {
-        res.status(403).json({
-          error: 'API_KEY_INVALID',
-          message:
-            'Gemini API rejected the configured server API key. Verify GEMINI_API_KEY in Settings > Secrets.',
-        });
-        return;
-      }
-
-      if (status === 404 || msg.includes('NOT_FOUND')) {
-        res.status(404).json({
-          error: 'MODEL_NOT_FOUND',
-          message: `Configured Gemini model "${GEMINI_MODEL}" was not found. Check GEMINI_MODEL environment configuration.`,
-        });
-        return;
-      }
-
-      res.status(502).json({
-        error: 'GEMINI_UPSTREAM_ERROR',
-        message: 'AI request failed due to an upstream error. FLAREX local exploration tools remain unaffected.',
+      res.status(classified.httpStatus).json({
+        error: classified.errorCode,
+        message: classified.userMessage,
       });
     }
   });

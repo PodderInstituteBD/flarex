@@ -22,9 +22,15 @@ import {
   extractDocumentIntelligence,
   ExtractedDocumentField,
 } from '../utils/documentIntelligence';
+import {
+  IngestedDatasetPackage,
+  ingestScientificTabularData,
+} from '../utils/scientificIngestion';
 
 interface DocumentIntelligenceProps {
   onOpenInvestigation: (id: string) => void;
+  onSendToNumericalAnalysis?: (pkg: IngestedDatasetPackage) => void;
+  onAnalyzeDocumentInAi?: (doc: { title: string; sourceUrl: string; content: string }) => void;
 }
 
 function labelTone(label: DocumentEvidenceLabel): BadgeTone {
@@ -94,8 +100,11 @@ function FieldListCard({
 
 export function DocumentIntelligence({
   onOpenInvestigation,
+  onSendToNumericalAnalysis,
+  onAnalyzeDocumentInAi,
 }: DocumentIntelligenceProps) {
   const [result, setResult] = useState<DocumentExtractionResult | null>(null);
+  const [rawLoadedText, setRawLoadedText] = useState<string>('');
   const [loadingSample, setLoadingSample] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [aiAnalysisText, setAiAnalysisText] = useState<string | null>(null);
@@ -116,9 +125,11 @@ export function DocumentIntelligence({
         const buffer = await file.arrayBuffer();
         const decoder = new TextDecoder('latin1');
         const raw = decoder.decode(buffer);
+        setRawLoadedText(raw);
         setResult(extractDocumentIntelligence(file.name, raw, file.size));
       } else {
         const text = await file.text();
+        setRawLoadedText(text);
         setResult(extractDocumentIntelligence(file.name, text, file.size));
       }
     } catch {
@@ -142,9 +153,11 @@ export function DocumentIntelligence({
       if (isPdf) {
         const buf = await resp.arrayBuffer();
         const raw = new TextDecoder('latin1').decode(buf);
+        setRawLoadedText(raw);
         setResult(extractDocumentIntelligence(fileName, raw, buf.byteLength));
       } else {
         const txt = await resp.text();
+        setRawLoadedText(txt);
         setResult(extractDocumentIntelligence(fileName, txt, txt.length));
       }
     } catch {
@@ -163,6 +176,7 @@ export function DocumentIntelligence({
       'BASS2-TM-02,PMMA cylindrical rod,21.0,1.5,1.0,Radiative loss limits spread in low coflow',
       'BASS2-TM-03,Silicone wire insulation,20.9,0.5,1.0,Sustained glowing combustion noted in microgravity',
     ].join('\n');
+    setRawLoadedText(sampleCsv);
     setResult(
       extractDocumentIntelligence('sample_psi_combustion_log.csv', sampleCsv, sampleCsv.length)
     );
@@ -371,17 +385,62 @@ export function DocumentIntelligence({
                   {result.title}
                 </h2>
               </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void runAiExcerptInterpretation()}
-                disabled={aiLoading}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[var(--accent-violet)]" aria-hidden="true" />
-                <span>
-                  {aiLoading ? 'Analyzing Excerpt...' : 'AI Interpret Excerpt'}
-                </span>
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {onSendToNumericalAnalysis &&
+                  (result.format === 'CSV' ||
+                    result.format === 'TXT' ||
+                    result.format === 'JSON') && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const pkg = ingestScientificTabularData({
+                          filename: result.fileName,
+                          content: rawLoadedText || result.rawPreview,
+                          sourceUrl: `Document Intelligence (${result.fileName})`,
+                          repository: 'Browser Document Import',
+                        });
+                        if (pkg.provenance.importStatus === 'FAILED') {
+                          setErrorMsg(pkg.summary.errors.join(' '));
+                        } else {
+                          onSendToNumericalAnalysis(pkg);
+                        }
+                      }}
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Send to Numerical Analysis</span>
+                    </Button>
+                  )}
+                {onAnalyzeDocumentInAi && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onAnalyzeDocumentInAi({
+                        title: result.title || result.fileName,
+                        sourceUrl: `Document Intelligence (${result.fileName})`,
+                        content: (rawLoadedText || result.rawPreview).slice(0, 5000),
+                      })
+                    }
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[var(--accent-blue)]" aria-hidden="true" />
+                    <span>Analyze in AI Mode B</span>
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => void runAiExcerptInterpretation()}
+                  disabled={aiLoading}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-[var(--accent-violet)]" aria-hidden="true" />
+                  <span>
+                    {aiLoading ? 'Analyzing Excerpt...' : 'AI Interpret Excerpt'}
+                  </span>
+                </Button>
+              </div>
             </div>
 
             {result.warnings.length > 0 && (

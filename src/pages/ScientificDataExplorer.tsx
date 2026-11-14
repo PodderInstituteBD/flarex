@@ -4,6 +4,7 @@ import {
   BarChart3,
   CheckCircle2,
   Database,
+  Download,
   ExternalLink,
   FileSpreadsheet,
   Info,
@@ -23,6 +24,9 @@ import {
   YAxis,
   ZAxis,
 } from 'recharts';
+import type { ClientErrorLogItem } from '../App';
+import { NumericalWorkbench } from '../components/NumericalWorkbench';
+import { SystemHealthPanel } from '../components/SystemHealthPanel';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -31,14 +35,31 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState, NoticeBanner } from '../components/ui/States';
 import { RESEARCH_GAPS } from '../data/researchCatalog';
 import { InvestigationRecord } from '../types/research';
+import {
+  exportDatasetCatalogCsv,
+  exportDatasetCatalogJson,
+  extractDatasetCatalog,
+  extractPublishedCountsFromRecords,
+  recommendValidChartType,
+  UnitFamilyId,
+} from '../utils/dataExplorer';
 import { validateResearchDatabase } from '../utils/databaseValidator';
 import { LinkCheckResult, runDataQualityAudit } from '../utils/dataQualityMonitor';
 import { buildEvidenceClaims } from '../utils/evidenceEngine';
+import type { ReproducibleAnalysisRun } from '../utils/scientificAnalysis';
+import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
 import { computeScientificTrends } from '../utils/trendAnalysis';
 
 interface ScientificDataExplorerProps {
   investigations: InvestigationRecord[];
   onOpenInvestigation: (id: string) => void;
+  ingestedDatasets?: IngestedDatasetPackage[];
+  analysisHistory?: ReproducibleAnalysisRun[];
+  onIngestDataset?: (pkg: IngestedDatasetPackage) => void;
+  onRemoveIngestedDataset?: (datasetId: string) => void;
+  onRecordAnalysisRun?: (run: ReproducibleAnalysisRun) => void;
+  clientErrors?: ClientErrorLogItem[];
+  onRecordClientError?: (source: string, message: string) => void;
 }
 
 type AuditFilter =
@@ -52,15 +73,36 @@ type ChartVariableView =
   | 'TIMELINE_SPANS'
   | 'TIMELINE_SCATTER'
   | 'ARCHIVE_DISTRIBUTION'
+  | 'ERA_HISTOGRAM'
   | 'EXPERIMENTAL_BOUNDS';
+
+function triggerDownload(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 export function ScientificDataExplorer({
   investigations,
   onOpenInvestigation,
+  ingestedDatasets = [],
+  analysisHistory = [],
+  onIngestDataset = () => {},
+  onRemoveIngestedDataset = () => {},
+  onRecordAnalysisRun = () => {},
+  clientErrors = [],
+  onRecordClientError,
 }: ScientificDataExplorerProps) {
   const [auditTab, setAuditTab] = useState<AuditFilter>('ALL');
   const [selectedInvestigationId, setSelectedInvestigationId] = useState<string>('ALL');
   const [variableView, setVariableView] = useState<ChartVariableView>('PUBLISHED_COUNTS');
+  const [unitFamilyFilter, setUnitFamilyFilter] = useState<UnitFamilyId>('ALL');
 
   const dbAudit = useMemo(
     () => validateResearchDatabase(investigations),
@@ -194,32 +236,10 @@ export function ScientificDataExplorer({
     [investigations, selectedInvestigationId]
   );
 
-  // Verified published count chart: ONLY SPICE (250 tests, >70 smoke points) and CFI-G (~150 steady flames)
+  // Dynamic published count series computed strictly from researchDatabase.json records
   const publishedCountsChartData = useMemo(
-    () => [
-      {
-        experiment: 'SPICE (1997)',
-        count: 250,
-        metric: 'Total Microgravity Tests Conducted',
-        unit: 'tests',
-        source: 'NASA SPICE Report (Dossier p. 2)',
-      },
-      {
-        experiment: 'SPICE Smoke Pts',
-        count: 70,
-        metric: 'Minimum Smoke Points Recorded (>70)',
-        unit: 'smoke points (lower bound)',
-        source: 'NASA SPICE Report (Dossier p. 2)',
-      },
-      {
-        experiment: 'CFI-G (2021)',
-        count: 150,
-        metric: 'Steady Diffusion Flames Created (~150)',
-        unit: 'flames (approx.)',
-        source: 'Univ. of Maryland / Phys.org NASA ISS Summary (Dossier p. 1)',
-      },
-    ],
-    []
+    () => extractPublishedCountsFromRecords(investigations, selectedInvestigationId),
+    [investigations, selectedInvestigationId]
   );
 
   // Experimental condition min/max chart from strictly documented quantitativeData ranges
@@ -245,6 +265,49 @@ export function ScientificDataExplorer({
     );
     return items;
   }, [investigations, selectedInvestigationId]);
+
+  const datasetCatalog = useMemo(
+    () =>
+      extractDatasetCatalog(investigations).filter((item) => {
+        if (
+          selectedInvestigationId !== 'ALL' &&
+          item.investigationId !== selectedInvestigationId
+        ) {
+          return false;
+        }
+        if (unitFamilyFilter !== 'ALL' && item.unitFamily !== unitFamilyFilter) {
+          return false;
+        }
+        return true;
+      }),
+    [investigations, selectedInvestigationId, unitFamilyFilter]
+  );
+
+  const eraHistogramData = useMemo(
+    () =>
+      trends.eraTimeline.map((b) => ({
+        bucket: b.era.split(' (')[0],
+        era: b.era,
+        count: b.count,
+      })),
+    [trends.eraTimeline]
+  );
+
+  const activePointCount =
+    variableView === 'PUBLISHED_COUNTS'
+      ? publishedCountsChartData.length
+      : variableView === 'EXPERIMENTAL_BOUNDS'
+      ? experimentalRangeChartData.length
+      : variableView === 'TIMELINE_SCATTER' || variableView === 'TIMELINE_SPANS'
+      ? timelineChartData.length
+      : variableView === 'ERA_HISTOGRAM'
+      ? eraHistogramData.length
+      : archiveDistributionData.length;
+
+  const chartRecommendation = useMemo(
+    () => recommendValidChartType(variableView, activePointCount),
+    [variableView, activePointCount]
+  );
 
   const quantitativeEntries = useMemo(
     () =>
@@ -334,12 +397,12 @@ export function ScientificDataExplorer({
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5"
       >
         <Card padding="sm">
-          <p className="text-xs text-[var(--text-secondary)]">Raw Local CSVs Loaded</p>
-          <p className="mt-1 text-xl font-bold font-mono-tabular text-[var(--status-warning)]">
-            0 datasets
+          <p className="text-xs text-[var(--text-secondary)]">Session Tabular Datasets</p>
+          <p className="mt-1 text-xl font-bold font-mono-tabular text-[var(--accent-cyan)]">
+            {ingestedDatasets.length} dataset{ingestedDatasets.length === 1 ? '' : 's'}
           </p>
           <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-            Raw telemetry resides in NASA PSI (e.g. 13000263).
+            0 bundled telemetry CSVs; import PSI/NTRS files below.
           </p>
         </Card>
         <Card padding="sm">
@@ -390,9 +453,20 @@ export function ScientificDataExplorer({
         </Card>
       </section>
 
-      {/* Investigation & Variable Selector Controls */}
-      <Card as="section" padding="sm" aria-label="Dataset explorer controls">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+      {/* FLAREX 5.0 Modules 2, 3, 4 & 7: Raw Data Ingestion, Numerical Analysis & Reproducibility */}
+      <NumericalWorkbench
+        investigations={investigations}
+        ingestedDatasets={ingestedDatasets}
+        analysisHistory={analysisHistory}
+        onIngestDataset={onIngestDataset}
+        onRemoveIngestedDataset={onRemoveIngestedDataset}
+        onRecordAnalysisRun={onRecordAnalysisRun}
+        onRecordClientError={onRecordClientError}
+      />
+
+      {/* Investigation, Unit Family & Variable Selector Controls */}
+      <Card as="section" padding="sm" aria-label="Dataset explorer controls" className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
           <div className="space-y-1">
             <label
               htmlFor="data-investigation-select"
@@ -419,6 +493,26 @@ export function ScientificDataExplorer({
 
           <div className="space-y-1">
             <label
+              htmlFor="data-unit-family-select"
+              className="text-xs font-medium text-[var(--text-secondary)]"
+            >
+              Unit-Compatible Filter
+            </label>
+            <Select
+              id="data-unit-family-select"
+              value={unitFamilyFilter}
+              onChange={(e) => setUnitFamilyFilter(e.target.value as UnitFamilyId)}
+            >
+              <option value="ALL">All Unit Families ({investigations.length} studies)</option>
+              <option value="COUNTS">Counts &amp; Dimensionless Factors (tests, flames, ratios)</option>
+              <option value="THERMAL_POWER">Thermal, Energy &amp; Gas (K, W, psi, O2%)</option>
+              <option value="FLOW_ELECTRIC">Airflow &amp; Electric Field (cm/s, kV)</option>
+              <option value="SIZE_TIME">Particulate Size &amp; Duration (μm, days)</option>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <label
               htmlFor="data-variable-select"
               className="text-xs font-medium text-[var(--text-secondary)]"
             >
@@ -432,21 +526,63 @@ export function ScientificDataExplorer({
               }
             >
               <option value="PUBLISHED_COUNTS">
-                Published Test &amp; Flame Counts (SPICE vs. CFI-G)
+                Published Test, Flame &amp; Multiplier Counts (Bar)
               </option>
               <option value="TIMELINE_SPANS">
-                Documented Campaign Duration Spans (Bar Chart)
+                Documented Campaign Duration Spans (Bar)
               </option>
               <option value="TIMELINE_SCATTER">
                 Campaign Start Year vs. Span (Scatter Plot)
               </option>
+              <option value="ERA_HISTOGRAM">
+                Campaign Start Era Distribution (Histogram)
+              </option>
               <option value="ARCHIVE_DISTRIBUTION">
-                Database Archive Availability Distribution
+                Database Archive Availability Distribution (Bar)
               </option>
               <option value="EXPERIMENTAL_BOUNDS">
                 Documented Operating Upper Bounds (Ranges Only)
               </option>
             </Select>
+          </div>
+        </div>
+
+        <div className="pt-2 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone="cyan">Auto-Chart: {chartRecommendation.chartType}</Badge>
+            <span className="text-[var(--text-secondary)]">{chartRecommendation.reason}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                triggerDownload(
+                  exportDatasetCatalogCsv(datasetCatalog),
+                  'flarex_dataset_catalog.csv',
+                  'text/csv;charset=utf-8'
+                )
+              }
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Export CSV</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                triggerDownload(
+                  exportDatasetCatalogJson(datasetCatalog),
+                  'flarex_dataset_catalog.json',
+                  'application/json;charset=utf-8'
+                )
+              }
+            >
+              <Download className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Export JSON</span>
+            </Button>
           </div>
         </div>
       </Card>
@@ -493,6 +629,7 @@ export function ScientificDataExplorer({
           {(variableView === 'PUBLISHED_COUNTS' ||
             variableView === 'EXPERIMENTAL_BOUNDS' ||
             variableView === 'ARCHIVE_DISTRIBUTION' ||
+            variableView === 'ERA_HISTOGRAM' ||
             variableView === 'TIMELINE_SCATTER') && (
             <Card as="section" className="space-y-4">
               <div className="flex items-start justify-between gap-2">
@@ -504,9 +641,11 @@ export function ScientificDataExplorer({
                         ? 'Experimental Condition Bounds (Min / Max)'
                         : variableView === 'TIMELINE_SCATTER'
                         ? 'Campaign Start Year vs. Active Span'
+                        : variableView === 'ERA_HISTOGRAM'
+                        ? 'Campaign Start Era Histogram'
                         : variableView === 'ARCHIVE_DISTRIBUTION'
                         ? 'Archive Availability Distribution'
-                        : 'Published Experiment & Flame Counts'}
+                        : 'Published Experiment & Count Figures (DB-Derived)'}
                     </span>
                   </h2>
                   <p className="text-xs text-[var(--text-secondary)]">
@@ -514,9 +653,11 @@ export function ScientificDataExplorer({
                       ? 'Heterogeneous physical units (kV, K, μm, days, tests) — inspect tooltip per bar for unit & source.'
                       : variableView === 'TIMELINE_SCATTER'
                       ? 'X-axis: Start Year · Y-axis: Calendar Duration (years) · Source: Curated NASA Dossier'
+                      : variableView === 'ERA_HISTOGRAM'
+                      ? 'X-axis: Campaign Era Bin · Y-axis: Study Frequency (count)'
                       : variableView === 'ARCHIVE_DISTRIBUTION'
                       ? 'X-axis: Availability Classification · Y-axis: Number of Records (count)'
-                      : 'Units: Count (tests / smoke points / flames) · NASA SPICE Report & UMD CFI-G Summary'}
+                      : 'Extracted dynamically from researchDatabase.json quantitativeData records'}
                   </p>
                 </div>
                 <Badge tone="blue">Source-Backed</Badge>
@@ -578,6 +719,38 @@ export function ScientificDataExplorer({
                         fill="var(--accent-cyan)"
                       />
                     </ScatterChart>
+                  ) : variableView === 'ERA_HISTOGRAM' ? (
+                    <BarChart
+                      data={eraHistogramData}
+                      margin={{ top: 10, right: 16, left: 0, bottom: 24 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
+                      <XAxis
+                        dataKey="bucket"
+                        tick={{ fill: 'var(--text-secondary)', fontSize: 10 }}
+                        axisLine={{ stroke: 'var(--border-strong)' }}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                        axisLine={{ stroke: 'var(--border-strong)' }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'var(--bg-card)',
+                          borderColor: 'var(--border-strong)',
+                          color: 'var(--text-primary)',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                        }}
+                      />
+                      <Bar
+                        dataKey="count"
+                        name="Studies in Era"
+                        fill="var(--accent-blue)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
                   ) : variableView === 'ARCHIVE_DISTRIBUTION' ? (
                     <BarChart
                       data={archiveDistributionData}
@@ -735,12 +908,14 @@ export function ScientificDataExplorer({
                   <strong className="text-[var(--text-primary)]">Sample &amp; Context:</strong>{' '}
                   {variableView === 'TIMELINE_SCATTER'
                     ? 'Shuttle, ISS (MSG/CIR/MDCA), Cygnus cargo bay, and 1g UL ground baseline.'
+                    : variableView === 'ERA_HISTOGRAM'
+                    ? `${investigations.length} records binned by documented campaign start year.`
                     : variableView === 'ARCHIVE_DISTRIBUTION'
                     ? `${investigations.length} curated records indexed across PSI, NTRS, and terrestrial baselines.`
-                    : 'SPICE (1997 Shuttle coflow C3H6/C3H8/C2H4) vs. CFI-G (2021 ISS porous-burner rich premixed cool diffusion flames).'}
+                    : 'All plotted counts and thresholds come directly from embedded quantitativeData entries in researchDatabase.json.'}
                 </p>
                 <p className="text-[var(--status-warning)]">
-                  <strong>Data-Quality Note:</strong> SPICE smoke points are reported as &ldquo;&gt;70&rdquo; (lower bound plotted at 70), and CFI-G is reported as &ldquo;~150&rdquo; (approximate). These are campaign counts, not comparable performance scores.
+                  <strong>Chart &amp; Time-Series Boundary:</strong> {chartRecommendation.lineChartReason}
                 </p>
               </div>
             </Card>
@@ -837,6 +1012,82 @@ export function ScientificDataExplorer({
           </Card>
         </div>
       )}
+
+      {/* Structured Dataset Metadata Catalog Table */}
+      <Card as="section" className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-display text-[17px] font-semibold text-[var(--text-primary)]">
+              Dataset Metadata Registry ({datasetCatalog.length} entries)
+            </h2>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Every local quantitative bound and external PSI/NTRS dataset pointer with exact units, measurement context, availability status, and original source link.
+            </p>
+          </div>
+          <Badge tone="neutral">{unitFamilyFilter === 'ALL' ? 'All Units' : unitFamilyFilter}</Badge>
+        </div>
+
+        <div className="overflow-x-auto rounded-[10px] border border-[var(--border-subtle)]">
+          <table className="w-full text-left border-collapse min-w-[780px] text-xs">
+            <thead>
+              <tr className="bg-[var(--bg-secondary)] border-b border-[var(--border-subtle)] text-[11px] uppercase tracking-[0.04em] text-[var(--text-muted)]">
+                <th scope="col" className="p-3">Dataset / Metric Title</th>
+                <th scope="col" className="p-3">Investigation</th>
+                <th scope="col" className="p-3">Repository</th>
+                <th scope="col" className="p-3">Units &amp; Type</th>
+                <th scope="col" className="p-3">Availability</th>
+                <th scope="col" className="p-3">Source</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-subtle)]">
+              {datasetCatalog.slice(0, 18).map((item) => (
+                <tr key={item.id} className="hover:bg-[var(--bg-elevated)]/40">
+                  <td className="p-3 align-top">
+                    <p className="font-semibold text-[var(--text-primary)]">{item.title}</p>
+                    <p className="text-[11px] text-[var(--text-muted)] mt-0.5 line-clamp-2">
+                      {item.measurementContext}
+                    </p>
+                  </td>
+                  <td className="p-3 align-top whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => onOpenInvestigation(item.investigationId)}
+                      className="text-[var(--accent-blue)] font-medium hover:underline cursor-pointer"
+                    >
+                      {item.investigationShortName}
+                    </button>
+                  </td>
+                  <td className="p-3 align-top font-mono-tabular text-[var(--text-secondary)]">
+                    {item.repository}
+                  </td>
+                  <td className="p-3 align-top">
+                    <span className="block font-mono-tabular text-[var(--text-primary)]">
+                      {item.units.join(', ')}
+                    </span>
+                    <span className="block text-[11px] text-[var(--text-muted)]">
+                      {item.dataType}
+                    </span>
+                  </td>
+                  <td className="p-3 align-top text-[var(--text-secondary)]">
+                    {item.availabilityLabel}
+                  </td>
+                  <td className="p-3 align-top whitespace-nowrap">
+                    <a
+                      href={item.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[var(--accent-blue)] hover:underline"
+                    >
+                      <span>Open</span>
+                      <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       {/* Module 5: Scientific Trend Analysis (Computed strictly from FLAREX DB) */}
       <Card as="section" className="space-y-4">
@@ -1018,6 +1269,13 @@ export function ScientificDataExplorer({
           ))}
         </div>
       </Card>
+
+      {/* FLAREX 5.0 Module 11: Live System Health & AI Telemetry Monitoring */}
+      <SystemHealthPanel
+        ingestedDatasets={ingestedDatasets}
+        analysisHistory={analysisHistory}
+        clientErrors={clientErrors}
+      />
 
       {/* Filterable Epistemic Ledger */}
       <Card as="section" className="space-y-4">

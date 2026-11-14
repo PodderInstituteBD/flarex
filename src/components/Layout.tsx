@@ -5,6 +5,7 @@ import {
   BookmarkCheck,
   BookOpen,
   Check,
+  Compass,
   Download,
   FileSearch,
   GitCompare,
@@ -197,6 +198,7 @@ interface LayoutProps {
   copyToast: CopyToastState | null;
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
+  onOpenDemoMode?: () => void;
   children: React.ReactNode;
 }
 
@@ -217,6 +219,7 @@ export function Layout({
   copyToast,
   theme,
   onToggleTheme,
+  onOpenDemoMode,
   children,
 }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -331,10 +334,10 @@ export function Layout({
     const isCollapsed = !isMobile && sidebarCollapsed;
 
     return (
-      <div className="flex flex-col h-full bg-[var(--bg-sidebar)] border-r border-[var(--border-subtle)] select-none">
+      <div className="flex flex-col h-full overflow-hidden bg-[var(--bg-sidebar)] border-r border-[var(--border-subtle)] select-none">
         {/* Brand row */}
         <div
-          className={`flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] ${
+          className={`shrink-0 flex items-center justify-between gap-2 border-b border-[var(--border-subtle)] ${
             isCollapsed ? 'px-3 py-4 flex-col' : 'px-4 py-4'
           }`}
         >
@@ -381,7 +384,7 @@ export function Layout({
 
         {/* Grouped Navigation */}
         <nav
-          className="flex-1 px-2.5 py-4 space-y-5 overflow-y-auto"
+          className="flex-1 min-h-0 px-2.5 py-4 space-y-5 overflow-y-auto"
           aria-label={isMobile ? 'Mobile navigation' : 'Primary navigation'}
         >
           {NAV_GROUPS.map((group) => {
@@ -480,10 +483,36 @@ export function Layout({
         </nav>
 
         {/* Bottom utility bar */}
-        <div className="px-2.5 pb-3 pt-2 border-t border-[var(--border-subtle)] space-y-2">
+        <div className="shrink-0 relative z-10 bg-[var(--bg-sidebar)] px-2.5 pb-3 pt-2 border-t border-[var(--border-subtle)] space-y-2">
+          {onOpenDemoMode && (
+            <button
+              type="button"
+              tabIndex={getSidebarTabIndex(NAV_ITEMS.length + 1)}
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onOpenDemoMode();
+              }}
+              aria-label="Open Guided Demonstration Mode"
+              title={isCollapsed ? 'Guided Demonstration Mode' : undefined}
+              className={`w-full flex items-center ${
+                isCollapsed ? 'justify-center px-2' : 'justify-between px-2.5'
+              } py-2 text-xs font-medium rounded-[8px] bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/30 hover:bg-[var(--accent-cyan)]/18 transition-colors cursor-pointer`}
+            >
+              <span className="flex items-center gap-2">
+                <Compass className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                {!isCollapsed && <span>Demo Mode</span>}
+              </span>
+              {!isCollapsed && (
+                <span className="font-mono-tabular text-[10px] px-1.5 py-0.5 rounded-[6px] bg-[var(--bg-primary)]/80 border border-[var(--border-subtle)]">
+                  6 steps
+                </span>
+              )}
+            </button>
+          )}
+
           <button
             type="button"
-            tabIndex={getSidebarTabIndex(NAV_ITEMS.length + 1)}
+            tabIndex={getSidebarTabIndex(NAV_ITEMS.length + 2)}
             onClick={() => {
               setMobileMenuOpen(false);
               onToggleShortcuts(true);

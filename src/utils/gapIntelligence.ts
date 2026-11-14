@@ -7,6 +7,7 @@ export interface DynamicGapSignal {
   signalLabel: string;
   title: string;
   evidenceBasis: string;
+  missingInformation: string;
   affectedCount: number;
   affectedInvestigationIds: string[];
   suggestedQuestions: string[];
@@ -16,6 +17,13 @@ export interface DynamicGapSignal {
 export interface GapIntelligenceReport {
   curatedGaps: ResearchGapRecord[];
   dynamicSignals: DynamicGapSignal[];
+  coverageAudit: {
+    totalRecords: number;
+    withRawLocalCsv: number;
+    withPeerReviewedDoi: number;
+    withCompleteEnvParams: number;
+    plannedOrOngoing: number;
+  };
   suggestedResearchQuestions: Array<{
     question: string;
     relatedArea: string;
@@ -51,6 +59,7 @@ export function buildGapIntelligence(
       signalLabel: 'Potential gap in the reviewed FLAREX sources',
       title: 'Zero Direct Partial-Gravity (Lunar 1/6g / Martian 3/8g) Datasets Indexed',
       evidenceBasis: `${partialGravityCount} of ${records.length} indexed records contain direct Lunar or Martian combustion measurements.`,
+      missingInformation: 'Empirical 1/6g Lunar and 3/8g Martian flame spread, extinction, and smoke transport measurements.',
       affectedCount: records.length,
       affectedInvestigationIds: ['bass-ii', 'acme-efield', 'sofie-mist'],
       suggestedQuestions: [
@@ -64,6 +73,7 @@ export function buildGapIntelligence(
       signalLabel: 'Potential gap in the reviewed FLAREX sources',
       title: 'Limited Local Raw Numerical Telemetry vs. External PSI Archives',
       evidenceBasis: `${noLocalRawCsv.length} of ${records.length} indexed records have no bundled raw time-series CSV/TXT file locally, and ${noPublicPsi.length} are planned, ongoing, or conditional release.`,
+      missingInformation: 'Raw time-series thermocouple, O2/CO2 gas sensor CSVs, and high-speed flame video files residing in NASA PSI.',
       affectedCount: noLocalRawCsv.length,
       affectedInvestigationIds: noPublicPsi.map((r) => r.id),
       suggestedQuestions: [
@@ -77,6 +87,7 @@ export function buildGapIntelligence(
       signalLabel: 'Potential gap in the reviewed FLAREX sources',
       title: 'Incomplete Environmental Boundary Reporting Across Summaries',
       evidenceBasis: `${missingEnvironmental.length} of ${records.length} reviewed dossier entries omit at least one explicit O2%, ambient pressure, or airflow velocity bound.`,
+      missingInformation: 'Explicit O2 percentage, chamber pressure (psi/atm), or airflow velocity (cm/s) bounds omitted from short summaries.',
       affectedCount: missingEnvironmental.length,
       affectedInvestigationIds: missingEnvironmental.map((r) => r.id).slice(0, 6),
       suggestedQuestions: [
@@ -92,6 +103,7 @@ export function buildGapIntelligence(
       evidenceBasis: `Low local domain counts observed in: ${lowCoverageCats
         .map((c) => `${c.label} (${c.count})`)
         .join(', ')}. Furthermore, Battery Fire Research relies 100% on terrestrial 1g UL tests.`,
+      missingInformation: 'In-flight 0g lithium-ion cell thermal runaway data and bundled multi-campaign droplet extinction tables.',
       affectedCount: lowCoverageCats.length,
       affectedInvestigationIds: ['battery-fire-ul', 'flex-cfi-g', 'flex-2-family'],
       suggestedQuestions: [
@@ -105,6 +117,7 @@ export function buildGapIntelligence(
       signalLabel: 'Potential gap in the reviewed FLAREX sources',
       title: 'Approximate Timeframes Without Exact Day-Level Publication Dates',
       evidenceBasis: `${missingPubDate.length} of ${records.length} indexed records carry only multi-year campaign timeframes rather than exact publicationDate stamps.`,
+      missingInformation: 'Exact ISO day-level publication timestamps for multi-year ISS hardware campaigns without a primary report date.',
       affectedCount: missingPubDate.length,
       affectedInvestigationIds: missingPubDate.map((r) => r.id).slice(0, 5),
       suggestedQuestions: [
@@ -145,6 +158,15 @@ export function buildGapIntelligence(
   return {
     curatedGaps,
     dynamicSignals,
+    coverageAudit: {
+      totalRecords: records.length,
+      withRawLocalCsv: records.length - noLocalRawCsv.length,
+      withPeerReviewedDoi: records.filter(
+        (r) => Boolean(r.doi) || Boolean(r.publications?.length)
+      ).length,
+      withCompleteEnvParams: records.length - missingEnvironmental.length,
+      plannedOrOngoing: records.filter((r) => r.isPlannedOrOngoing).length,
+    },
     suggestedResearchQuestions,
   };
 }

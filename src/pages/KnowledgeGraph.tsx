@@ -21,6 +21,7 @@ import {
   KnowledgeNodeType,
   layoutKnowledgeGraph,
   NODE_TYPE_META,
+  summarizeGraphAudit,
 } from '../utils/knowledgeGraph';
 
 interface KnowledgeGraphProps {
@@ -79,6 +80,11 @@ export function KnowledgeGraph({
         (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)
       ),
     [graph.edges, visibleNodeIds]
+  );
+
+  const graphAudit = useMemo(
+    () => summarizeGraphAudit({ nodes: filteredNodes, edges: visibleEdges }),
+    [filteredNodes, visibleEdges]
   );
 
   const positionedNodes = useMemo(
@@ -267,14 +273,17 @@ export function KnowledgeGraph({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
         <Card padding="none" className="lg:col-span-8 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-[var(--border-subtle)] bg-[var(--bg-secondary)] flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-5 h-0.5 bg-[var(--accent-blue)] inline-block" />
-                Solid edge: Verified dossier relationship
+                Verified ({graphAudit.verifiedEdges})
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-5 h-0.5 border-t border-dashed border-[var(--status-warning)] inline-block" />
-                Dashed edge: Inferred family link
+                Inferred RELATED_TO ({graphAudit.inferredEdges})
+              </span>
+              <span className="text-[var(--text-muted)] hidden sm:inline">
+                Predicates: INVESTIGATES · USES_MATERIAL · MEASURES · USES_SENSOR · DOCUMENTED_IN · SUPPORTS_FINDING · RELATED_TO
               </span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -315,6 +324,29 @@ export function KnowledgeGraph({
           </div>
 
           <div className="bg-[var(--bg-primary)] lab-grid-bg overflow-hidden">
+            {positionedNodes.length === 0 ? (
+              <div className="h-[420px] sm:h-[520px] flex flex-col items-center justify-center p-6 text-center space-y-3">
+                <p className="text-sm font-semibold text-[var(--text-primary)]">
+                  No graph entities match your current search or node-type filters.
+                </p>
+                <p className="text-xs text-[var(--text-secondary)] max-w-md">
+                  Clear the node search box or restore all entity types to inspect the verified microgravity combustion graph.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setActiveTypes(new Set(ALL_NODE_TYPES));
+                    setFocusId('ALL');
+                    resetViewport();
+                  }}
+                >
+                  Reset Graph Filters
+                </Button>
+              </div>
+            ) : (
             <svg
               viewBox="0 0 920 560"
               className="w-full h-[420px] sm:h-[520px] block select-none"
@@ -423,6 +455,7 @@ export function KnowledgeGraph({
                 })}
               </g>
             </svg>
+            )}
           </div>
         </Card>
 

@@ -20,6 +20,14 @@ import {
   generateExportJson,
   generateExportMarkdown,
 } from '../utils/exportCenter';
+import type { ReproducibleAnalysisRun } from '../utils/scientificAnalysis';
+import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
+import {
+  buildScientificReportPackage,
+  renderScientificReportCsv,
+  renderScientificReportJson,
+  renderScientificReportMarkdown,
+} from '../utils/scientificReport';
 import { ResearchWorkspaceState } from '../utils/workspaceStore';
 
 interface ExportCenterProps {
@@ -27,6 +35,8 @@ interface ExportCenterProps {
   compareIds: string[];
   workspace: ResearchWorkspaceState;
   initialReportType?: ExportReportType;
+  ingestedDatasets?: IngestedDatasetPackage[];
+  analysisHistory?: ReproducibleAnalysisRun[];
 }
 
 const REPORT_OPTIONS: Array<{
@@ -34,6 +44,12 @@ const REPORT_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
+  {
+    id: 'scientific_full_report',
+    label: 'FLAREX 5.0 Scientific Investigation Report (9 Sections)',
+    description:
+      'Complete 9-section scientific report integrating investigations, source IDs, imported datasets, reproducible stats, limitations, and references.',
+  },
   {
     id: 'investigation_profile',
     label: 'Investigation Profiles (Selected or Full)',
@@ -87,13 +103,18 @@ export function ExportCenter({
   investigations,
   compareIds,
   workspace,
-  initialReportType = 'comparison_report',
+  initialReportType = 'scientific_full_report',
+  ingestedDatasets = [],
+  analysisHistory = [],
 }: ExportCenterProps) {
   const [reportType, setReportType] = useState<ExportReportType>(initialReportType);
   const [previewFormat, setPreviewFormat] = useState<'csv' | 'json' | 'markdown'>(
     'markdown'
   );
   const [aiNote, setAiNote] = useState('');
+  const [researchQuestion, setResearchQuestion] = useState(
+    'How do fuel geometry, oxygen concentration, and microgravity flow conditions shape flame spread and spacecraft fire safety bounds across reviewed NASA studies?'
+  );
 
   const claims = useMemo(
     () => buildEvidenceClaims(investigations, RESEARCH_GAPS),
@@ -104,6 +125,19 @@ export function ExportCenter({
     const matched = investigations.filter((r) => compareIds.includes(r.id));
     return matched.length > 0 ? matched : investigations.slice(0, 3);
   }, [investigations, compareIds]);
+
+  const scientificFullPackage = useMemo(
+    () =>
+      buildScientificReportPackage({
+        researchQuestion,
+        selectedInvestigations,
+        ingestedDatasets,
+        analysisRuns: analysisHistory,
+        gaps: RESEARCH_GAPS,
+        aiInterpretationNote: aiNote,
+      }),
+    [researchQuestion, selectedInvestigations, ingestedDatasets, analysisHistory, aiNote]
+  );
 
   const bundleInput = useMemo(
     () => ({
@@ -118,9 +152,27 @@ export function ExportCenter({
     [reportType, selectedInvestigations, investigations, claims, workspace, aiNote]
   );
 
-  const csvContent = useMemo(() => generateExportCsv(bundleInput), [bundleInput]);
-  const jsonContent = useMemo(() => generateExportJson(bundleInput), [bundleInput]);
-  const mdContent = useMemo(() => generateExportMarkdown(bundleInput), [bundleInput]);
+  const csvContent = useMemo(
+    () =>
+      reportType === 'scientific_full_report'
+        ? renderScientificReportCsv(scientificFullPackage)
+        : generateExportCsv(bundleInput),
+    [reportType, scientificFullPackage, bundleInput]
+  );
+  const jsonContent = useMemo(
+    () =>
+      reportType === 'scientific_full_report'
+        ? renderScientificReportJson(scientificFullPackage)
+        : generateExportJson(bundleInput),
+    [reportType, scientificFullPackage, bundleInput]
+  );
+  const mdContent = useMemo(
+    () =>
+      reportType === 'scientific_full_report'
+        ? renderScientificReportMarkdown(scientificFullPackage)
+        : generateExportMarkdown(bundleInput),
+    [reportType, scientificFullPackage, bundleInput]
+  );
 
   const activePreview =
     previewFormat === 'csv'
@@ -196,6 +248,24 @@ export function ExportCenter({
               className="w-full px-3 py-2 text-xs rounded-[8px] bg-[var(--bg-input)] border border-[var(--border-subtle)] text-[var(--text-primary)]"
             />
           </div>
+
+          {reportType === 'scientific_full_report' && (
+            <div className="lg:col-span-12 space-y-1.5">
+              <label
+                htmlFor="export-research-question"
+                className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]"
+              >
+                3. Primary Research Question (Section 1 of Scientific Report)
+              </label>
+              <input
+                id="export-research-question"
+                type="text"
+                value={researchQuestion}
+                onChange={(e) => setResearchQuestion(e.target.value)}
+                className="w-full px-3 py-2 text-xs rounded-[8px] bg-[var(--bg-input)] border border-[var(--border-subtle)] text-[var(--text-primary)]"
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[var(--border-subtle)]">
