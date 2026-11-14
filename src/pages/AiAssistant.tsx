@@ -3,6 +3,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  FileCheck2,
   MessageSquareText,
   RotateCcw,
   Send,
@@ -16,6 +17,9 @@ import { Input, Select } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorState, LoadingSkeleton, NoticeBanner } from '../components/ui/States';
 import { InvestigationRecord } from '../types/research';
+import { retrieveRelevantInvestigations } from '../utils/researchLogic';
+
+type AnalysisMode = 'concept' | 'comparison' | 'evidence' | 'outline';
 
 interface RetrievedSourceRef {
   id: string;
@@ -63,6 +67,7 @@ export function AiAssistant({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [focusId, setFocusId] = useState<string>(initialFocusId ?? '');
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('concept');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [healthInfo, setHealthInfo] = useState<{
@@ -133,6 +138,7 @@ export function AiAssistant({
           message: trimmed,
           history: historyPayload,
           focusInvestigationId: focusId || undefined,
+          analysisMode,
         }),
       });
 
@@ -207,6 +213,45 @@ export function AiAssistant({
     setMessages([]);
   };
 
+  const generateDeterministicBrief = (questionText: string) => {
+    const query = questionText.trim() || 'Microgravity fire safety overview';
+    let hits = retrieveRelevantInvestigations(query, investigations, 4);
+    if (focusId) {
+      const focused = investigations.find((r) => r.id === focusId);
+      if (focused && !hits.some((r) => r.id === focused.id)) {
+        hits = [focused, ...hits.slice(0, 3)];
+      }
+    }
+    const facts = hits
+      .map(
+        (r) =>
+          `• ${r.shortName} (${r.platform} · ${r.gravityContext} · ${r.evidenceType}): ${r.reportedFindings ?? r.overview} [Source: ${r.sourceUrl}]`
+      )
+      .join('\n');
+    const caveats = hits
+      .map((r) => `• ${r.shortName} caveat: ${r.limitations[0] ?? 'See source dossier.'}`)
+      .join('\n');
+
+    setMessages((prev) => [
+      ...prev,
+      { id: `u-${Date.now()}`, role: 'user', text: query },
+      {
+        id: `a-${Date.now() + 1}`,
+        role: 'assistant',
+        model: 'Deterministic Local Retrieval (Non-AI)',
+        text: `Documented Dossier Facts (Extracted Deterministically — Not Generative AI):\n${facts}\n\nDocumented Limitations & Boundaries:\n${caveats}`,
+        sources: hits.map((r) => ({
+          id: r.id,
+          shortName: r.shortName,
+          name: r.name,
+          evidenceType: r.evidenceType,
+          psiId: r.psiId,
+          sourceUrl: r.sourceUrl,
+        })),
+      },
+    ]);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -249,21 +294,33 @@ export function AiAssistant({
                 {healthInfo?.model ? ` · ${healthInfo.model}` : ''}
               </span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Select
+                id="assistant-mode"
+                aria-label="Select AI analysis mode"
+                value={analysisMode}
+                onChange={(e) => setAnalysisMode(e.target.value as AnalysisMode)}
+                className="py-1.5 text-xs !w-full sm:!w-[170px]"
+              >
+                <option value="concept">Concept &amp; Design</option>
+                <option value="comparison">Cross-Study Compare</option>
+                <option value="evidence">Evidence &amp; Limitations</option>
+                <option value="outline">Review Outline &amp; Gaps</option>
+              </Select>
               <label
                 htmlFor="assistant-focus"
                 className="text-xs text-[var(--text-muted)] shrink-0 whitespace-nowrap"
               >
-                Focus study:
+                Focus:
               </label>
               <Select
                 id="assistant-focus"
                 value={focusId}
                 onChange={(e) => setFocusId(e.target.value)}
-                className="py-1.5 text-xs !w-full sm:!w-[210px]"
+                className="py-1.5 text-xs !w-full sm:!w-[175px]"
               >
                 <option value="">
-                  Auto-retrieve ({investigations.length} records)
+                  Auto ({investigations.length} records)
                 </option>
                 {investigations.map((inv) => (
                   <option key={inv.id} value={inv.id}>
@@ -297,7 +354,16 @@ export function AiAssistant({
                       message={msg.text}
                     />
                     {msg.retryPrompt && (
-                      <div className="flex justify-end">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => generateDeterministicBrief(msg.retryPrompt!)}
+                        >
+                          <FileCheck2 className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Deterministic Grounded Brief</span>
+                        </Button>
                         <Button
                           type="button"
                           variant="outline"
@@ -306,7 +372,7 @@ export function AiAssistant({
                           onClick={() => void sendQuestion(msg.retryPrompt!)}
                         >
                           <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-                          <span>Retry Question</span>
+                          <span>Retry AI Request</span>
                         </Button>
                       </div>
                     )}
@@ -428,6 +494,17 @@ export function AiAssistant({
               placeholder="Ask about microgravity flames, PSI datasets, limitations, or gaps..."
               disabled={loading}
             />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={loading}
+              onClick={() => generateDeterministicBrief(input)}
+              title="Generate instant factual brief from retrieved FLAREX records without calling Gemini"
+            >
+              <FileCheck2 className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Local Brief</span>
+            </Button>
             <Button
               type="submit"
               variant="primary"

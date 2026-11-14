@@ -2,10 +2,13 @@ import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
+  CheckCircle2,
   Database,
   ExternalLink,
   FileSpreadsheet,
   Info,
+  RefreshCw,
+  TrendingUp,
 } from 'lucide-react';
 import {
   Bar,
@@ -21,12 +24,17 @@ import {
   ZAxis,
 } from 'recharts';
 import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Select } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState, NoticeBanner } from '../components/ui/States';
+import { RESEARCH_GAPS } from '../data/researchCatalog';
 import { InvestigationRecord } from '../types/research';
 import { validateResearchDatabase } from '../utils/databaseValidator';
+import { LinkCheckResult, runDataQualityAudit } from '../utils/dataQualityMonitor';
+import { buildEvidenceClaims } from '../utils/evidenceEngine';
+import { computeScientificTrends } from '../utils/trendAnalysis';
 
 interface ScientificDataExplorerProps {
   investigations: InvestigationRecord[];
@@ -58,6 +66,65 @@ export function ScientificDataExplorer({
     () => validateResearchDatabase(investigations),
     [investigations]
   );
+
+  const trends = useMemo(
+    () => computeScientificTrends(investigations),
+    [investigations]
+  );
+
+  const claims = useMemo(
+    () => buildEvidenceClaims(investigations, RESEARCH_GAPS),
+    [investigations]
+  );
+
+  const qualityAudit = useMemo(
+    () => runDataQualityAudit(investigations, claims),
+    [investigations, claims]
+  );
+
+  const [linkResults, setLinkResults] = useState<LinkCheckResult[]>([]);
+  const [checkingLinks, setCheckingLinks] = useState(false);
+  const [lastAuditRunAt, setLastAuditRunAt] = useState<string | null>(null);
+
+  const runLiveLinkCheck = async () => {
+    if (checkingLinks) return;
+    setCheckingLinks(true);
+    try {
+      const sampleUrls = qualityAudit.uniqueCheckableUrls.slice(0, 8);
+      const resp = await fetch('/api/check-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls: sampleUrls.map((u) => u.url) }),
+      });
+      const payload = (await resp.json()) as {
+        results?: Array<{
+          url: string;
+          ok: boolean;
+          status: number | null;
+          checkedAt: string;
+          note?: string;
+        }>;
+      };
+      if (resp.ok && payload.results) {
+        const mapped: LinkCheckResult[] = payload.results.map((r) => {
+          const meta = sampleUrls.find((u) => u.url === r.url);
+          return {
+            url: r.url,
+            investigationId: meta?.investigationId ?? '',
+            label: meta?.label ?? r.url,
+            ok: r.ok,
+            status: r.status,
+            checkedAt: r.checkedAt,
+            note: r.note,
+          };
+        });
+        setLinkResults(mapped);
+        setLastAuditRunAt(new Date().toISOString());
+      }
+    } finally {
+      setCheckingLinks(false);
+    }
+  };
 
   const archiveDistributionData = useMemo(() => {
     const counts = new Map<string, number>();
@@ -771,20 +838,184 @@ export function ScientificDataExplorer({
         </div>
       )}
 
-      {/* Database Validation & Schema Integrity Check */}
-      <Card as="section" className="space-y-3" padding="sm">
+      {/* Module 5: Scientific Trend Analysis (Computed strictly from FLAREX DB) */}
+      <Card as="section" className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="font-display text-[15px] font-semibold text-[var(--text-primary)]">
-              Database Schema &amp; Integrity Validation
+            <h2 className="font-display text-[17px] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-[var(--accent-cyan)]" aria-hidden="true" />
+              <span>Scientific Trend Analysis Across Indexed Studies</span>
             </h2>
             <p className="text-xs text-[var(--text-secondary)]">
-              Automated validation across {dbAudit.totalRecords} curated records: duplicate IDs ({dbAudit.duplicateIds.length}), valid provenance ({dbAudit.validRecords}/{dbAudit.totalRecords}), average structured field coverage ({dbAudit.averageCompletenessPct}%).
+              {trends.scopeNotice}
             </p>
           </div>
-          <Badge tone={dbAudit.allPassedIntegrityChecks ? 'success' : 'warning'}>
-            {dbAudit.allPassedIntegrityChecks ? 'All Checks Passed' : 'Review Required'}
-          </Badge>
+          <Badge tone="cyan">DB-Derived Trends</Badge>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="p-3.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-2">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Most Studied Materials / Fuel Groups
+            </p>
+            <div className="space-y-1.5">
+              {trends.materialFrequency.slice(0, 6).map((m) => (
+                <div key={m.label} className="space-y-0.5 text-xs">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-[var(--text-secondary)] truncate">{m.label}</span>
+                    <span className="font-mono-tabular font-semibold text-[var(--text-primary)]">
+                      {m.count}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-[var(--bg-card)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-[var(--accent-blue)]"
+                      style={{
+                        width: `${Math.round((m.count / investigations.length) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-2">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Environmental Variables Representation
+            </p>
+            <div className="space-y-1.5">
+              {trends.variableCoverage.map((v) => (
+                <div key={v.label} className="space-y-0.5 text-xs">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-[var(--text-secondary)] truncate">{v.label}</span>
+                    <span className="font-mono-tabular font-semibold text-[var(--text-primary)]">
+                      {v.count}/{investigations.length}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-[var(--bg-card)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-[var(--accent-cyan)]"
+                      style={{
+                        width: `${Math.round((v.count / investigations.length) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-2">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Sensor &amp; Measurement Method Adoption
+            </p>
+            <div className="space-y-1.5">
+              {trends.sensorAndMethodCoverage.map((s) => (
+                <div key={s.label} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-[var(--text-secondary)] truncate">{s.label}</span>
+                  <span className="font-mono-tabular font-semibold text-[var(--accent-violet)]">
+                    {s.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="pt-2 border-t border-[var(--border-subtle)] space-y-1">
+              <p className="text-[11px] font-semibold text-[var(--status-warning)]">
+                Underrepresented Areas in FLAREX:
+              </p>
+              {trends.underrepresentedAreas.map((u) => (
+                <p key={u.area} className="text-[11px] text-[var(--text-muted)]">
+                  • {u.area}: {u.recordCount} records
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Module 12: Automated Data Quality Monitoring & Live Link Check */}
+      <Card as="section" className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-[17px] font-semibold text-[var(--text-primary)]">
+              Data Quality Monitoring &amp; URL Availability Audit
+            </h2>
+            <p className="text-xs text-[var(--text-secondary)]">
+              Evaluated {qualityAudit.totalChecksEvaluated} checks across {dbAudit.totalRecords} records: Critical ({qualityAudit.criticalCount}), Warnings ({qualityAudit.warningCount}), Info Notices ({qualityAudit.infoCount}), Duplicate IDs ({dbAudit.duplicateIds.length}), Avg. Completeness ({qualityAudit.averageCompletenessPct}%).
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge tone={qualityAudit.criticalCount === 0 ? 'success' : 'danger'}>
+              {qualityAudit.criticalCount === 0 ? '0 Critical Errors' : `${qualityAudit.criticalCount} Critical`}
+            </Badge>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={checkingLinks}
+              onClick={() => void runLiveLinkCheck()}
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${checkingLinks ? 'animate-spin' : ''}`}
+                aria-hidden="true"
+              />
+              <span>{checkingLinks ? 'Verifying URLs…' : 'Verify NASA Links Live'}</span>
+            </Button>
+          </div>
+        </div>
+
+        {lastAuditRunAt && linkResults.length > 0 && (
+          <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-2 text-xs">
+            <p className="font-mono-tabular text-[11px] text-[var(--text-muted)]">
+              Last live check completed: {new Date(lastAuditRunAt).toLocaleString()}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {linkResults.map((res) => (
+                <div
+                  key={res.url}
+                  className="flex items-center justify-between gap-2 p-2 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)]"
+                >
+                  <span className="truncate text-[var(--text-primary)]">{res.label}</span>
+                  <span
+                    className={`font-mono-tabular text-[11px] shrink-0 inline-flex items-center gap-1 ${
+                      res.ok ? 'text-[var(--status-success)]' : 'text-[var(--status-warning)]'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                    {res.status ? `HTTP ${res.status}` : res.note}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+          {qualityAudit.issues.slice(0, 12).map((iss) => (
+            <div
+              key={iss.id}
+              className="p-2.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2 text-xs"
+            >
+              <div className="min-w-0">
+                <span className="font-semibold text-[var(--text-primary)]">
+                  [{iss.category}] {iss.targetName}:
+                </span>{' '}
+                <span className="text-[var(--text-secondary)]">{iss.message}</span>
+              </div>
+              <Badge
+                tone={
+                  iss.severity === 'CRITICAL'
+                    ? 'danger'
+                    : iss.severity === 'WARNING'
+                    ? 'warning'
+                    : 'neutral'
+                }
+              >
+                {iss.severity}
+              </Badge>
+            </div>
+          ))}
         </div>
       </Card>
 

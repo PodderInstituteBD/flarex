@@ -41,7 +41,34 @@ interface ApiCacheEntry {
 }
 const ntrsCache = new Map<string, ApiCacheEntry>();
 const osdrCache = new Map<string, ApiCacheEntry>();
+const urlCheckCache = new Map<string, ApiCacheEntry>();
 const NASA_CACHE_TTL_MS = 15 * 60 * 1000;
+
+function isSafePublicHttpsUrl(rawUrl: string): { valid: boolean; parsed?: URL } {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:') return { valid: false };
+    const host = parsed.hostname.toLowerCase();
+    if (
+      !host ||
+      host === 'localhost' ||
+      host === '0.0.0.0' ||
+      host === '::1' ||
+      host.startsWith('127.') ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('169.254.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      host.endsWith('.local') ||
+      host.endsWith('.internal')
+    ) {
+      return { valid: false };
+    }
+    return { valid: true, parsed };
+  } catch {
+    return { valid: false };
+  }
+}
 
 // Simple sliding-window rate limiter per IP for /api/assistant
 const rateWindowMap = new Map<string, number[]>();
@@ -173,7 +200,7 @@ async function createServer() {
     try {
       const ntrsUrl = `https://ntrs.nasa.gov/api/citations/search?q=${encodeURIComponent(
         rawQuery
-      )}&page[size]=5`;
+      )}&page[size]=8`;
       const upstream = await fetch(ntrsUrl, {
         headers: { Accept: 'application/json' },
         signal: controller.signal,
@@ -194,9 +221,11 @@ async function createServer() {
           title?: string;
           publicationYear?: number;
           distributionDate?: string;
-          publications?: Array<{ publicationDate?: string }>;
+          reportNumber?: string;
+          otherIds?: Array<{ type?: string; value?: string }>;
+          publications?: Array<{ publicationDate?: string; doi?: string }>;
           authorAffiliations?: Array<{
-            meta?: { author?: { name?: string } };
+            meta?: { author?: { name?: string }; organization?: { name?: string } };
           }>;
           abstract?: string;
           stiType?: string;
@@ -204,7 +233,7 @@ async function createServer() {
         }>;
       };
 
-      const normalized = (payload.results ?? []).slice(0, 5).map((item) => {
+      const normalized = (payload.results ?? []).slice(0, 8).map((item) => {
         const rawDate =
           item.publications?.[0]?.publicationDate ??
           item.distributionDate ??
@@ -218,20 +247,34 @@ async function createServer() {
         const authors = (item.authorAffiliations ?? [])
           .map((a) => a.meta?.author?.name?.trim())
           .filter((name): name is string => Boolean(name))
-          .slice(0, 4);
+          .slice(0, 5);
+        const doiFromOther = (item.otherIds ?? []).find(
+          (oid) => oid.type?.toLowerCase() === 'doi' && oid.value
+        )?.value;
+        const doi = item.publications?.[0]?.doi ?? doiFromOther ?? null;
+        const reportFromOther = (item.otherIds ?? []).find(
+          (oid) =>
+            (oid.type?.toLowerCase().includes('report') ||
+              oid.type?.toLowerCase().includes('document')) &&
+            oid.value
+        )?.value;
+        const reportNumber = item.reportNumber ?? reportFromOther ?? null;
         const abstractSnippet =
           typeof item.abstract === 'string' && item.abstract.trim().length > 0
-            ? item.abstract.trim().slice(0, 220) +
-              (item.abstract.trim().length > 220 ? '…' : '')
+            ? item.abstract.trim().slice(0, 240) +
+              (item.abstract.trim().length > 240 ? '…' : '')
             : null;
 
         return {
           id: item.id ?? null,
           title: item.title ?? 'Untitled NTRS Record',
           publicationYear: parsedYear,
+          publicationDate: rawDate ? rawDate.slice(0, 10) : null,
           stiType: item.stiType ?? 'Technical Document',
           center: item.center?.name ?? null,
           authors,
+          doi,
+          reportNumber,
           abstractSnippet,
           url: item.id
             ? `https://ntrs.nasa.gov/citations/${item.id}`
@@ -282,7 +325,7 @@ async function createServer() {
     try {
       const osdrUrl = `https://osdr.nasa.gov/osdr/data/search?term=${encodeURIComponent(
         rawQuery
-      )}&size=3`;
+      )}&size=5`;
       const upstream = await fetch(osdrUrl, {
         headers: { Accept: 'application/json' },
         signal: controller.signal,
@@ -314,7 +357,7 @@ async function createServer() {
       };
 
       const total = payload.hits?.total ?? 0;
-      const results = (payload.hits?.hits ?? []).slice(0, 3).map((hit) => {
+      const results = (payload.hits?.hits ?? []).slice(0, 5).map((hit) => {
         const src = hit._source ?? {};
         const accession = src.Accession || hit._id || 'OSDR Record';
         return {
@@ -347,6 +390,94 @@ async function createServer() {
     }
   });
 
+  app.post('/api/check-url', async (req, res) => {
+    const body = req.body as { urls?: unknown; url?: unknown };
+    const rawList: string[] = Array.isArray(body.urls)
+      ? body.urls.filter((u): u is string => typeof u === 'string').slice(0, 10)
+      : typeof body.url === 'string'
+      ? [body.url]
+      : [];
+
+    if (rawList.length === 0) {
+      res.status(400).json({
+        error: 'INVALID_URL_LIST',
+        message: 'Provide "url" or an array "urls" (max 10 HTTPS URLs).',
+      });
+      return;
+    }
+
+    const results = await Promise.all(
+      rawList.map(async (targetUrl) => {
+        const check = isSafePublicHttpsUrl(targetUrl);
+        const now = new Date().toISOString();
+        if (!check.valid || !check.parsed) {
+          return {
+            url: targetUrl,
+            ok: false,
+            status: null,
+            checkedAt: now,
+            note: 'Blocked non-HTTPS or private/internal host.',
+          };
+        }
+
+        const cached = urlCheckCache.get(targetUrl);
+        if (cached && cached.expiresAt > Date.now()) {
+          return { ...(cached.data as object), cached: true };
+        }
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 4500);
+        try {
+          let resp = await fetch(check.parsed.toString(), {
+            method: 'HEAD',
+            redirect: 'follow',
+            signal: controller.signal,
+            headers: { 'User-Agent': 'FLAREX-Link-Validator/1.0' },
+          });
+          if (resp.status === 405 || resp.status === 403 || resp.status === 501) {
+            resp = await fetch(check.parsed.toString(), {
+              method: 'GET',
+              redirect: 'follow',
+              signal: controller.signal,
+              headers: { 'User-Agent': 'FLAREX-Link-Validator/1.0' },
+            });
+          }
+          clearTimeout(timer);
+          const outcome = {
+            url: targetUrl,
+            ok: resp.status >= 200 && resp.status < 400,
+            status: resp.status,
+            checkedAt: now,
+            note:
+              resp.status >= 200 && resp.status < 400
+                ? 'HTTP reachable'
+                : `Returned HTTP ${resp.status}`,
+          };
+          if (urlCheckCache.size >= 80) {
+            const oldest = urlCheckCache.keys().next().value;
+            if (oldest) urlCheckCache.delete(oldest);
+          }
+          urlCheckCache.set(targetUrl, {
+            expiresAt: Date.now() + NASA_CACHE_TTL_MS,
+            data: outcome,
+          });
+          return outcome;
+        } catch {
+          clearTimeout(timer);
+          return {
+            url: targetUrl,
+            ok: false,
+            status: null,
+            checkedAt: now,
+            note: 'Request timed out or upstream host unreachable from server.',
+          };
+        }
+      })
+    );
+
+    res.json({ results });
+  });
+
   app.post('/api/assistant', async (req, res) => {
     const clientIp = req.ip || 'local';
     if (isRateLimited(clientIp)) {
@@ -361,6 +492,7 @@ async function createServer() {
       message?: unknown;
       history?: unknown;
       focusInvestigationId?: unknown;
+      analysisMode?: unknown;
     };
 
     if (typeof body.message !== 'string') {
@@ -406,8 +538,17 @@ async function createServer() {
       }
     }
 
+    const modeHintMap: Record<string, string> = {
+      concept: 'Explain experimental concepts, methodology, hardware, and documented findings cleanly for students and researchers.',
+      comparison: 'Perform a structured cross-study comparison highlighting differences in fuels, airflow, platform scale, and gravity compatibility warnings.',
+      evidence: 'Audit evidence maturity (flight telemetry vs. descriptive overview vs. planned vs. terrestrial 1g) and state explicit limitations.',
+      outline: 'Generate a concise structured literature-review outline and 3 grounded open research questions labeled as potential gaps in reviewed FLAREX sources.',
+    };
+    const modeKey = typeof body.analysisMode === 'string' ? body.analysisMode : 'concept';
+    const modeInstruction = modeHintMap[modeKey] ?? modeHintMap.concept;
+
     const contextBlock = buildCompactContext(relevantRecords);
-    const promptInput = `USER QUESTION:\n${question}\n\nRETRIEVED RELEVANT DOSSIER RECORDS (${relevantRecords.length} of ${researchRecords.length} total records):\n${contextBlock}`;
+    const promptInput = `ANALYSIS MODE (${modeKey}): ${modeInstruction}\n\nUSER QUESTION:\n${question}\n\nRETRIEVED RELEVANT DOSSIER RECORDS (${relevantRecords.length} of ${researchRecords.length} total records):\n${contextBlock}`;
 
     const sanitizedHistory = Array.isArray(body.history)
       ? body.history

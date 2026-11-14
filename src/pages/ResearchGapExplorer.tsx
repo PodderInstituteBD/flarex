@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
+  HelpCircle,
+  MessageSquareText,
   RotateCcw,
   ShieldAlert,
 } from 'lucide-react';
@@ -13,15 +15,18 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState } from '../components/ui/States';
 import { RESEARCH_GAPS } from '../data/researchCatalog';
 import { InvestigationRecord, ResearchGapRecord } from '../types/research';
+import { buildGapIntelligence } from '../utils/gapIntelligence';
 
 interface ResearchGapExplorerProps {
   investigations: InvestigationRecord[];
   onOpenInvestigation: (id: string) => void;
+  onAskAiQuestion?: (question: string) => void;
 }
 
 export function ResearchGapExplorer({
   investigations,
   onOpenInvestigation,
+  onAskAiQuestion,
 }: ResearchGapExplorerProps) {
   const [areaFilter, setAreaFilter] = useState<string>('ALL');
   const [strengthFilter, setStrengthFilter] = useState<string>('ALL');
@@ -60,18 +65,112 @@ export function ResearchGapExplorer({
     setProvenanceFilter('ALL');
   };
 
+  const gapIntelligence = useMemo(
+    () => buildGapIntelligence(investigations, RESEARCH_GAPS),
+    [investigations]
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Knowledge & Telemetry Audit"
-        title="Research Gap Explorer"
-        description="Structured catalog of spacecraft fire-safety knowledge gaps derived from dossier limitations, archive audits, and provenance boundaries, separating published dossier gaps from cross-study synthesis."
+        title="Research Gap Intelligence"
+        description="Combines curated dossier gaps with dynamic database-computed gap signals framed strictly as potential gaps in the reviewed FLAREX sources—never claiming absolute global gaps in NASA science."
         meta={
           <Badge tone="warning" className="font-mono-tabular">
-            {filteredGaps.length} of {RESEARCH_GAPS.length} documented gaps
+            {filteredGaps.length} curated + {gapIntelligence.dynamicSignals.length} dynamic signals
           </Badge>
         }
       />
+
+      {/* Module 8 Dynamic Gap Signals */}
+      <section aria-labelledby="dynamic-gap-signals" className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2
+            id="dynamic-gap-signals"
+            className="font-display text-base font-bold text-[var(--text-primary)]"
+          >
+            Dynamic Database Gap Signals ({gapIntelligence.dynamicSignals.length})
+          </h2>
+          <Badge tone="cyan">Computed from Indexed Records</Badge>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {gapIntelligence.dynamicSignals.map((sig) => (
+            <Card key={sig.id} padding="sm" className="space-y-2 flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <Badge tone="warning">{sig.signalLabel}</Badge>
+                <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                  {sig.title}
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  {sig.evidenceBasis}
+                </p>
+                <p className="text-[11px] text-[var(--text-muted)]">
+                  Caveat: {sig.caveat}
+                </p>
+              </div>
+              {onAskAiQuestion && sig.suggestedQuestions[0] && (
+                <button
+                  type="button"
+                  onClick={() => onAskAiQuestion(sig.suggestedQuestions[0])}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent-blue)] hover:underline pt-1 cursor-pointer text-left"
+                >
+                  <MessageSquareText className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span>Explore Question in AI Analyst</span>
+                </button>
+              )}
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* Suggested Future Research Questions */}
+      <Card padding="md" className="space-y-3">
+        <div className="flex items-center gap-2">
+          <HelpCircle className="w-4 h-4 text-[var(--accent-blue)]" aria-hidden="true" />
+          <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
+            Suggested Future Investigation Questions
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {gapIntelligence.suggestedResearchQuestions.map((item) => (
+            <div
+              key={item.question}
+              className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-2"
+            >
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-cyan)]">
+                {item.relatedArea}
+              </span>
+              <p className="text-xs text-[var(--text-primary)] leading-relaxed">
+                {item.question}
+              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex flex-wrap gap-1.5">
+                  {item.relatedIds.map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => onOpenInvestigation(id)}
+                      className="text-[11px] px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent-blue)] cursor-pointer"
+                    >
+                      {id}
+                    </button>
+                  ))}
+                </div>
+                {onAskAiQuestion && (
+                  <button
+                    type="button"
+                    onClick={() => onAskAiQuestion(item.question)}
+                    className="text-[11px] font-semibold text-[var(--accent-blue)] hover:underline cursor-pointer"
+                  >
+                    Ask AI
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {/* Gap Filters */}
       <Card as="section" padding="sm" aria-label="Filter research gaps">

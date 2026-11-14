@@ -1,18 +1,24 @@
 import {
   ArrowLeft,
-  Check,
+  Bookmark,
+  BookmarkCheck,
+  Download,
   ExternalLink,
   GitCompare,
   ListTree,
   MessageSquareText,
+  Network,
   Plus,
+  Check,
 } from 'lucide-react';
+import { useMemo } from 'react';
 import { AvailabilityIndicator, EvidenceLabel } from '../components/EvidenceLabel';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, Panel } from '../components/ui/Card';
 import { NoticeBanner } from '../components/ui/States';
 import { InvestigationRecord } from '../types/research';
+import { discoverRelatedInvestigations } from '../utils/crossInvestigation';
 import {
   extractEnvironmentalParams,
   NOT_AVAILABLE_IN_SOURCE,
@@ -21,21 +27,37 @@ import {
 
 interface InvestigationDetailsProps {
   investigation: InvestigationRecord;
+  allInvestigations: InvestigationRecord[];
   isCompared: boolean;
   compareFull: boolean;
+  isSaved: boolean;
   onToggleCompare: (id: string) => void;
+  onToggleSave: (id: string) => void;
   onBackToExplorer: () => void;
   onAskAboutInvestigation: (investigation: InvestigationRecord) => void;
+  onOpenInvestigation: (id: string) => void;
+  onOpenInGraph: (id: string) => void;
+  onExportProfile: () => void;
 }
 
 export function InvestigationDetails({
   investigation,
+  allInvestigations,
   isCompared,
   compareFull,
+  isSaved,
   onToggleCompare,
+  onToggleSave,
   onBackToExplorer,
   onAskAboutInvestigation,
+  onOpenInvestigation,
+  onOpenInGraph,
+  onExportProfile,
 }: InvestigationDetailsProps) {
+  const relatedMatches = useMemo(
+    () => discoverRelatedInvestigations(investigation, allInvestigations, 4),
+    [investigation, allInvestigations]
+  );
   const envParams = extractEnvironmentalParams(investigation);
   const validation = validateInvestigationRecord(investigation);
 
@@ -118,6 +140,40 @@ export function InvestigationDetails({
         </button>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant={isSaved ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => onToggleSave(investigation.id)}
+          >
+            {isSaved ? (
+              <BookmarkCheck className="w-3.5 h-3.5 text-[var(--accent-cyan)]" aria-hidden="true" />
+            ) : (
+              <Bookmark className="w-3.5 h-3.5" aria-hidden="true" />
+            )}
+            <span>{isSaved ? 'Saved' : 'Save to Workspace'}</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenInGraph(investigation.id)}
+          >
+            <Network className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Graph</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onExportProfile}
+          >
+            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Export</span>
+          </Button>
+
           <Button
             type="button"
             variant={isCompared ? 'secondary' : 'outline'}
@@ -562,6 +618,41 @@ export function InvestigationDetails({
               ))}
             </div>
           </Card>
+          {/* Related Investigations Discovery (Cross-Investigation Intelligence) */}
+          {relatedMatches.length > 0 && (
+            <Card as="section" className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-display text-[17px] font-semibold text-[var(--text-primary)]">
+                  Related Investigations &amp; Compatibility Notes
+                </h2>
+                <Badge tone="cyan">Cross-Study Discovery</Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {relatedMatches.map((match) => (
+                  <div
+                    key={match.investigation.id}
+                    className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1.5"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onOpenInvestigation(match.investigation.id)}
+                      className="text-sm font-semibold text-[var(--accent-blue)] hover:underline text-left cursor-pointer"
+                    >
+                      {match.investigation.shortName} — {match.investigation.platform}
+                    </button>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      {match.sharedThemes.join(' · ')}
+                    </p>
+                    {match.compatibilityCaution && (
+                      <p className="text-[11px] text-[var(--status-warning)] font-medium">
+                        Caution: {match.compatibilityCaution}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
       </div>
     </div>

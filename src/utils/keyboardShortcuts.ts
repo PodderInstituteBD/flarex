@@ -67,6 +67,36 @@ export const GLOBAL_SHORTCUTS: ShortcutDefinition[] = [
     description: 'Navigate to Research Gap Explorer',
   },
   {
+    key: 'k',
+    displayKey: 'K',
+    label: 'Knowledge Graph',
+    description: 'Navigate to Scientific Knowledge Graph',
+  },
+  {
+    key: 'l',
+    displayKey: 'L',
+    label: 'Document Intelligence',
+    description: 'Navigate to Scientific Document Intelligence Lab',
+  },
+  {
+    key: 'e',
+    displayKey: 'E',
+    label: 'Evidence Engine',
+    description: 'Navigate to Evidence Traceability Registry',
+  },
+  {
+    key: 'w',
+    displayKey: 'W',
+    label: 'Research Workspace',
+    description: 'Navigate to Local Browser Research Workspace',
+  },
+  {
+    key: 'x',
+    displayKey: 'X',
+    label: 'Export Center',
+    description: 'Navigate to Scientific Export Center',
+  },
+  {
     key: '?',
     displayKey: '?',
     label: 'Keyboard Shortcuts',
@@ -111,6 +141,16 @@ export function resolveGlobalShortcut(key: string): ShortcutAction | null {
       return { type: 'NAVIGATE', page: 'data' };
     case 'g':
       return { type: 'NAVIGATE', page: 'gaps' };
+    case 'k':
+      return { type: 'NAVIGATE', page: 'graph' };
+    case 'l':
+      return { type: 'NAVIGATE', page: 'documents' };
+    case 'e':
+      return { type: 'NAVIGATE', page: 'evidence' };
+    case 'w':
+      return { type: 'NAVIGATE', page: 'workspace' };
+    case 'x':
+      return { type: 'NAVIGATE', page: 'export' };
     default:
       return null;
   }

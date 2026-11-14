@@ -4,7 +4,7 @@ import { buildResearchUrlPath, parseResearchUrlState } from './urlState.ts';
 
 const VALID_IDS = new Set(['bass-ii', 'saffire', 'flex-cfi-g']);
 
-test('parseResearchUrlState parses overview, detail, explorer family, and invalid inputs safely', () => {
+test('parseResearchUrlState parses overview, detail, explorer family, new 3.0 routes, and invalid inputs safely', () => {
   assert.deepEqual(parseResearchUrlState('', VALID_IDS, 'bass-ii'), {
     page: 'overview',
   });
@@ -20,6 +20,11 @@ test('parseResearchUrlState parses overview, detail, explorer family, and invali
     parseResearchUrlState('?page=explorer&family=ACME', VALID_IDS, 'bass-ii'),
     { page: 'explorer', family: 'ACME' }
   );
+  for (const page of ['graph', 'documents', 'evidence', 'workspace', 'export'] as const) {
+    assert.deepEqual(parseResearchUrlState(`?page=${page}`, VALID_IDS, 'bass-ii'), {
+      page,
+    });
+  }
   assert.deepEqual(
     parseResearchUrlState('?page=invalid', VALID_IDS, 'bass-ii'),
     { page: 'overview' }
@@ -41,4 +46,9 @@ test('buildResearchUrlPath produces clean shareable URLs for active pages', () =
     '/?page=explorer&family=SoFIE'
   );
   assert.equal(buildResearchUrlPath('/', { page: 'gaps' }), '/?page=gaps');
+  assert.equal(buildResearchUrlPath('/', { page: 'graph' }), '/?page=graph');
+  assert.equal(buildResearchUrlPath('/', { page: 'documents' }), '/?page=documents');
+  assert.equal(buildResearchUrlPath('/', { page: 'evidence' }), '/?page=evidence');
+  assert.equal(buildResearchUrlPath('/', { page: 'workspace' }), '/?page=workspace');
+  assert.equal(buildResearchUrlPath('/', { page: 'export' }), '/?page=export');
 });

@@ -7,7 +7,7 @@ import {
   shouldIgnoreShortcutEvent,
 } from './keyboardShortcuts.ts';
 
-test('resolveGlobalShortcut maps h, s, /, a, c, m, d, g, and ? accurately', () => {
+test('resolveGlobalShortcut maps h, s, /, a, c, m, d, g, k, l, e, w, x, and ? accurately', () => {
   assert.deepEqual(resolveGlobalShortcut('h'), {
     type: 'NAVIGATE',
     page: 'overview',
@@ -44,6 +44,26 @@ test('resolveGlobalShortcut maps h, s, /, a, c, m, d, g, and ? accurately', () =
   assert.deepEqual(resolveGlobalShortcut('g'), {
     type: 'NAVIGATE',
     page: 'gaps',
+  });
+  assert.deepEqual(resolveGlobalShortcut('k'), {
+    type: 'NAVIGATE',
+    page: 'graph',
+  });
+  assert.deepEqual(resolveGlobalShortcut('l'), {
+    type: 'NAVIGATE',
+    page: 'documents',
+  });
+  assert.deepEqual(resolveGlobalShortcut('e'), {
+    type: 'NAVIGATE',
+    page: 'evidence',
+  });
+  assert.deepEqual(resolveGlobalShortcut('w'), {
+    type: 'NAVIGATE',
+    page: 'workspace',
+  });
+  assert.deepEqual(resolveGlobalShortcut('x'), {
+    type: 'NAVIGATE',
+    page: 'export',
   });
   assert.deepEqual(resolveGlobalShortcut('?'), { type: 'TOGGLE_HELP' });
   assert.equal(resolveGlobalShortcut('z'), null);

@@ -132,3 +132,17 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Clean Print-to-PDF stylesheet for scientific report exports */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
+

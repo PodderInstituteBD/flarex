@@ -1,5 +1,13 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRight, CheckCircle2, Info, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  BookmarkPlus,
+  CheckCircle2,
+  Download,
+  Info,
+  X,
+} from 'lucide-react';
 import { EvidenceLabel } from '../components/EvidenceLabel';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -8,6 +16,7 @@ import { Select } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState, NoticeBanner } from '../components/ui/States';
 import { InvestigationRecord } from '../types/research';
+import { analyzeCrossInvestigations } from '../utils/crossInvestigation';
 import { buildComparisonRows } from '../utils/researchLogic';
 
 interface InvestigationComparisonProps {
@@ -15,6 +24,8 @@ interface InvestigationComparisonProps {
   selectedIds: string[];
   onUpdateSelection: (ids: string[]) => void;
   onOpenInvestigation: (id: string) => void;
+  onSaveComparison: (title: string, ids: string[]) => void;
+  onExportComparison: () => void;
 }
 
 export function InvestigationComparison({
@@ -22,6 +33,8 @@ export function InvestigationComparison({
   selectedIds,
   onUpdateSelection,
   onOpenInvestigation,
+  onSaveComparison,
+  onExportComparison,
 }: InvestigationComparisonProps) {
   const [differencesOnly, setDifferencesOnly] = useState(false);
 
@@ -35,6 +48,11 @@ export function InvestigationComparison({
 
   const comparisonRows = useMemo(
     () => buildComparisonRows(selectedRecords),
+    [selectedRecords]
+  );
+
+  const crossAnalysis = useMemo(
+    () => analyzeCrossInvestigations(selectedRecords),
     [selectedRecords]
   );
 
@@ -104,6 +122,33 @@ export function InvestigationComparison({
             >
               Provenance Contrast
             </Button>
+            {selectedRecords.length >= 2 && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    onSaveComparison(
+                      selectedRecords.map((r) => r.shortName).join(' vs '),
+                      selectedRecords.map((r) => r.id)
+                    )
+                  }
+                >
+                  <BookmarkPlus className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Save</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onExportComparison}
+                >
+                  <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Export</span>
+                </Button>
+              </>
+            )}
           </div>
         }
       />
@@ -190,6 +235,87 @@ export function InvestigationComparison({
           <NoticeBanner tone="info" title="Scientific Comparison Rule">
             Because the loaded dossier contains structured descriptions and heterogeneous operating ranges rather than standardized raw telemetry CSVs across studies, FLAREX performs structured qualitative and metadata comparison without synthesizing artificial parity scores.
           </NoticeBanner>
+
+          {/* Module 4 Cross-Investigation Intelligence Panel */}
+          <Card padding="md" className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
+                Cross-Investigation Intelligence Synthesis
+              </h2>
+              <Badge tone="cyan">Compatibility &amp; Divergence Audit</Badge>
+            </div>
+
+            {crossAnalysis.compatibilityWarnings.length > 0 && (
+              <div className="p-3 rounded-[8px] bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/30 space-y-1 text-xs">
+                <p className="font-semibold text-[var(--status-warning)] flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Condition &amp; Gravity Compatibility Warnings</span>
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-[var(--text-primary)]">
+                  {crossAnalysis.compatibilityWarnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1.5">
+                <p className="font-semibold text-[var(--accent-blue)]">
+                  Evidence &amp; Variable Overlap
+                </p>
+                <ul className="space-y-1 text-[var(--text-secondary)]">
+                  {[
+                    ...crossAnalysis.sharedPlatforms,
+                    ...crossAnalysis.sharedFuelsOrTopics,
+                    ...crossAnalysis.sharedVariables,
+                    ...crossAnalysis.sharedSensors,
+                  ].length === 0 ? (
+                    <li className="italic text-[var(--text-muted)]">
+                      No direct platform or variable overlap in reviewed summaries.
+                    </li>
+                  ) : (
+                    [
+                      ...crossAnalysis.sharedPlatforms,
+                      ...crossAnalysis.sharedFuelsOrTopics,
+                      ...crossAnalysis.sharedVariables,
+                      ...crossAnalysis.sharedSensors,
+                    ]
+                      .slice(0, 6)
+                      .map((item) => <li key={item}>• {item}</li>)
+                  )}
+                </ul>
+              </div>
+
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1.5">
+                <p className="font-semibold text-[var(--status-warning)]">
+                  Documented Divergences
+                </p>
+                {crossAnalysis.divergencesDetected.length === 0 ? (
+                  <p className="text-[var(--text-muted)] italic">
+                    No conflicting findings documented across these specific records.
+                  </p>
+                ) : (
+                  <ul className="space-y-1 text-[var(--text-secondary)]">
+                    {crossAnalysis.divergencesDetected.map((d) => (
+                      <li key={d}>• {d}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1.5">
+                <p className="font-semibold text-[var(--text-primary)]">
+                  Missing Coverage (Not Contradiction)
+                </p>
+                <ul className="space-y-1 text-[var(--text-secondary)]">
+                  {crossAnalysis.missingInformationGaps.slice(0, 4).map((m) => (
+                    <li key={m}>• {m}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </Card>
 
           {/* Summary & Filter Controls */}
           <div className="flex flex-wrap items-center justify-between gap-3 px-1">

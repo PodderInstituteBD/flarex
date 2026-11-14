@@ -27,6 +27,7 @@ import {
   DomainCategoryId,
   ResearchStats,
 } from '../utils/researchLogic';
+import { computeScientificTrends } from '../utils/trendAnalysis';
 
 interface HomeOverviewProps {
   stats: ResearchStats;
@@ -57,6 +58,11 @@ export function HomeOverview({
 }: HomeOverviewProps) {
   const categories = useMemo(
     () => computeCategoryBreakdown(investigations),
+    [investigations]
+  );
+
+  const trends = useMemo(
+    () => computeScientificTrends(investigations),
     [investigations]
   );
 
@@ -191,30 +197,40 @@ export function HomeOverview({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
           <Card padding="sm">
-            <p className="text-[12px] text-[var(--text-secondary)]">Total Research Records</p>
+            <p className="text-[12px] text-[var(--text-secondary)]">Investigations Indexed</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--text-primary)]">
               {stats.totalRecords}
             </p>
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-              Curated dossier index
+              {stats.nasaInvestigations} NASA · {stats.reviewPapers + stats.complementaryTerrestrial} review/1g
             </p>
           </Card>
 
           <Card padding="sm">
-            <p className="text-[12px] text-[var(--text-secondary)]">NASA Investigations</p>
+            <p className="text-[12px] text-[var(--text-secondary)]">Indexed Publications</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--accent-blue)]">
-              {stats.nasaInvestigations}
+              {trends.publicationCoverage.totalPrimaryAndPeerPublications}
             </p>
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
-              Shuttle, ISS &amp; Cygnus
+              {trends.publicationCoverage.withPeerReviewedDoi} w/ DOI · {trends.publicationCoverage.withNtrsId} NTRS
+            </p>
+          </Card>
+
+          <Card padding="sm">
+            <p className="text-[12px] text-[var(--text-secondary)]">PSI Dataset IDs</p>
+            <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--accent-cyan)]">
+              {trends.publicationCoverage.withPsiId}
+            </p>
+            <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+              {stats.publicInPsi} publicly indexed in PSI
             </p>
           </Card>
 
           <Card padding="sm">
             <p className="text-[12px] text-[var(--text-secondary)]">Research Categories</p>
-            <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--accent-cyan)]">
+            <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--text-primary)]">
               {categories.length}
             </p>
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
@@ -232,13 +248,67 @@ export function HomeOverview({
             </p>
           </Card>
 
-          <Card padding="sm" className="col-span-2 sm:col-span-1">
-            <p className="text-[12px] text-[var(--text-secondary)]">Without Raw Datasets</p>
+          <Card padding="sm">
+            <p className="text-[12px] text-[var(--text-secondary)]">Without Local Raw CSV</p>
             <p className="mt-1.5 text-[28px] font-bold font-mono-tabular text-[var(--status-warning)]">
               {stats.withoutRawNumericalData}
             </p>
             <p className="mt-1 text-[11px] text-[var(--text-muted)]">
               Raw logs hosted in PSI
+            </p>
+          </Card>
+        </div>
+
+        {/* Repository, Timeline & Environmental Representation Strip */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-1">
+          <Card padding="sm" className="space-y-2.5">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Repository Coverage
+            </p>
+            <div className="space-y-1.5">
+              {trends.repositoryDistribution.map((repo) => (
+                <div key={repo.label} className="flex items-center justify-between text-xs">
+                  <span className="text-[var(--text-secondary)]">{repo.label}</span>
+                  <span className="font-mono-tabular font-semibold text-[var(--text-primary)]">
+                    {repo.count} {repo.count === 1 ? 'record' : 'records'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card padding="sm" className="space-y-2.5">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Campaign Timeline Eras
+            </p>
+            <div className="space-y-1.5">
+              {trends.eraTimeline.map((bucket) => (
+                <div key={bucket.era} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-[var(--text-secondary)] truncate">{bucket.era}</span>
+                  <span className="font-mono-tabular font-semibold text-[var(--accent-cyan)] shrink-0">
+                    {bucket.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card padding="sm" className="space-y-2.5">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Top Environmental Variables &amp; Provenance Note
+            </p>
+            <div className="space-y-1.5">
+              {trends.variableCoverage.slice(0, 4).map((v) => (
+                <div key={v.label} className="flex items-center justify-between text-xs">
+                  <span className="text-[var(--text-secondary)] truncate">{v.label}</span>
+                  <span className="font-mono-tabular font-semibold text-[var(--accent-blue)]">
+                    {v.count}/{stats.totalRecords}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-[var(--text-muted)] pt-1 border-t border-[var(--border-subtle)]">
+              Notice: Exact day-level publication dates are omitted where absent in the reviewed dossier; campaign windows reflect documented timeframes.
             </p>
           </Card>
         </div>
@@ -512,15 +582,29 @@ export function HomeOverview({
 
           <button
             type="button"
-            onClick={() => onNavigate('sources')}
+            onClick={() => onNavigate('graph')}
+            className="p-4 rounded-[12px] bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:border-[var(--accent-blue)]/50 text-left transition-colors space-y-1.5 cursor-pointer"
+          >
+            <Compass className="w-4 h-4 text-[var(--accent-cyan)]" aria-hidden="true" />
+            <span className="block text-sm font-semibold text-[var(--text-primary)]">
+              Knowledge Graph
+            </span>
+            <span className="block text-xs text-[var(--text-secondary)]">
+              Explore 10 entity types, fuels, sensors, and verified vs. inferred links.
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onNavigate('documents')}
             className="p-4 rounded-[12px] bg-[var(--bg-card)] border border-[var(--border-subtle)] hover:border-[var(--accent-blue)]/50 text-left transition-colors space-y-1.5 cursor-pointer"
           >
             <BookOpen className="w-4 h-4 text-[var(--accent-violet)]" aria-hidden="true" />
             <span className="block text-sm font-semibold text-[var(--text-primary)]">
-              Sources &amp; NASA NTRS Lookup
+              Document Intelligence
             </span>
             <span className="block text-xs text-[var(--text-secondary)]">
-              Browse categorized references, DOIs, PSI portals, and live NTRS search.
+              Parse JSON, CSV, TXT, XML, &amp; PDF files with 5 provenance labels.
             </span>
           </button>
         </div>

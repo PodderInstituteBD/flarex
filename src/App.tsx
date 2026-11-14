@@ -11,12 +11,26 @@ import { HomeOverview } from './pages/HomeOverview';
 import { InvestigationDetails } from './pages/InvestigationDetails';
 import { InvestigationExplorer } from './pages/InvestigationExplorer';
 import { InvestigationRecord } from './types/research';
+import { ExportReportType } from './utils/exportCenter';
 import {
   resolveGlobalShortcut,
   shouldIgnoreShortcutEvent,
 } from './utils/keyboardShortcuts';
 import { computeResearchStats, DomainCategoryId } from './utils/researchLogic';
 import { buildResearchUrlPath, parseResearchUrlState } from './utils/urlState';
+import {
+  addSavedComparison,
+  BookmarkedSourceEntry,
+  createCollection,
+  deleteCollection,
+  deleteResearchNote,
+  loadWorkspaceFromStorage,
+  ResearchWorkspaceState,
+  saveWorkspaceToStorage,
+  toggleBookmarkedSource,
+  toggleSavedInvestigation,
+  upsertResearchNote,
+} from './utils/workspaceStore';
 
 const InvestigationComparison = lazy(() =>
   import('./pages/InvestigationComparison').then((mod) => ({
@@ -46,6 +60,31 @@ const SourcesReferences = lazy(() =>
 const AboutTransparency = lazy(() =>
   import('./pages/AboutTransparency').then((mod) => ({
     default: mod.AboutTransparency,
+  }))
+);
+const KnowledgeGraph = lazy(() =>
+  import('./pages/KnowledgeGraph').then((mod) => ({
+    default: mod.KnowledgeGraph,
+  }))
+);
+const DocumentIntelligence = lazy(() =>
+  import('./pages/DocumentIntelligence').then((mod) => ({
+    default: mod.DocumentIntelligence,
+  }))
+);
+const EvidenceEngine = lazy(() =>
+  import('./pages/EvidenceEngine').then((mod) => ({
+    default: mod.EvidenceEngine,
+  }))
+);
+const ResearchWorkspace = lazy(() =>
+  import('./pages/ResearchWorkspace').then((mod) => ({
+    default: mod.ResearchWorkspace,
+  }))
+);
+const ExportCenter = lazy(() =>
+  import('./pages/ExportCenter').then((mod) => ({
+    default: mod.ExportCenter,
   }))
 );
 
@@ -143,6 +182,12 @@ export default function App() {
   );
   const [assistantFocusId, setAssistantFocusId] = useState<string | null>(null);
   const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null);
+  const [graphFocusId, setGraphFocusId] = useState<string | 'ALL'>('ALL');
+  const [exportReportType, setExportReportType] =
+    useState<ExportReportType>('investigation_profile');
+  const [workspace, setWorkspace] = useState<ResearchWorkspaceState>(() =>
+    loadWorkspaceFromStorage(VALID_INVESTIGATION_IDS)
+  );
   const [searchFocusTrigger, setSearchFocusTrigger] = useState(0);
   const [assistantFocusTrigger, setAssistantFocusTrigger] = useState(0);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -150,6 +195,10 @@ export default function App() {
   const toastTimerRef = useRef<number | null>(null);
 
   const stats = useMemo(() => computeResearchStats(INVESTIGATIONS), []);
+
+  useEffect(() => {
+    saveWorkspaceToStorage(workspace);
+  }, [workspace]);
 
   useEffect(() => {
     const rootEl = document.documentElement;
@@ -277,6 +326,9 @@ export default function App() {
       setExplorerCategoryFilter('ALL');
       setExplorerInitialQuery('');
     }
+    if (page === 'graph') {
+      setGraphFocusId('ALL');
+    }
     setActivePage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
@@ -376,9 +428,125 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleAskGapQuestion = useCallback((question: string) => {
+    setAssistantFocusId(null);
+    setAssistantPrompt(question);
+    setActivePage('assistant');
+    setAssistantFocusTrigger((n) => n + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleToggleSaveInvestigation = useCallback(
+    (id: string) => {
+      setWorkspace((prev) => {
+        const wasSaved = prev.savedInvestigationIds.includes(id);
+        showCopyToast(wasSaved ? 'Removed from workspace' : 'Saved to workspace');
+        return toggleSavedInvestigation(prev, id);
+      });
+    },
+    [showCopyToast]
+  );
+
+  const handleToggleBookmarkSource = useCallback(
+    (entry: Omit<BookmarkedSourceEntry, 'savedAt'>) => {
+      setWorkspace((prev) => {
+        const existed = prev.bookmarkedSources.some((b) => b.url === entry.url);
+        showCopyToast(existed ? 'Bookmark removed' : 'Source bookmarked');
+        return toggleBookmarkedSource(prev, entry);
+      });
+    },
+    [showCopyToast]
+  );
+
+  const handleRemoveBookmarkUrl = useCallback(
+    (url: string) => {
+      setWorkspace((prev) => ({
+        ...prev,
+        bookmarkedSources: prev.bookmarkedSources.filter((b) => b.url !== url),
+      }));
+      showCopyToast('Bookmark removed');
+    },
+    [showCopyToast]
+  );
+
+  const handleSaveComparison = useCallback(
+    (title: string, ids: string[]) => {
+      setWorkspace((prev) => addSavedComparison(prev, title, ids));
+      showCopyToast('Comparison saved to workspace');
+    },
+    [showCopyToast]
+  );
+
+  const handleSaveNote = useCallback(
+    (note: {
+      id?: string;
+      targetType: 'investigation' | 'source' | 'general';
+      targetId: string;
+      targetTitle: string;
+      content: string;
+    }) => {
+      setWorkspace((prev) => upsertResearchNote(prev, note));
+      showCopyToast('Research note saved');
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteNote = useCallback(
+    (noteId: string) => {
+      setWorkspace((prev) => deleteResearchNote(prev, noteId));
+      showCopyToast('Research note deleted');
+    },
+    [showCopyToast]
+  );
+
+  const handleCreateCollection = useCallback(
+    (name: string, description: string, ids: string[]) => {
+      setWorkspace((prev) => createCollection(prev, name, description, ids));
+      showCopyToast('Collection created');
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteCollection = useCallback(
+    (collectionId: string) => {
+      setWorkspace((prev) => deleteCollection(prev, collectionId));
+      showCopyToast('Collection deleted');
+    },
+    [showCopyToast]
+  );
+
+  const handleLoadComparison = useCallback((ids: string[]) => {
+    const valid = ids
+      .filter((id) => VALID_INVESTIGATION_IDS.has(id))
+      .slice(0, 3);
+    if (valid.length > 0) {
+      setCompareIds(valid);
+      setActivePage('compare');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  const handleOpenInGraph = useCallback((id: string) => {
+    setGraphFocusId(id);
+    setActivePage('graph');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleExportReport = useCallback((reportType: ExportReportType) => {
+    setExportReportType(reportType);
+    setActivePage('export');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   const selectedInvestigation =
     INVESTIGATIONS.find((r) => r.id === selectedInvestigationId) ??
     INVESTIGATIONS[0];
+
+  const workspaceCount =
+    workspace.savedInvestigationIds.length +
+    workspace.bookmarkedSources.length +
+    workspace.notes.length +
+    workspace.savedComparisons.length;
 
   useEffect(() => {
     const pageTitles: Record<AppPage, string> = {
@@ -386,10 +554,15 @@ export default function App() {
       explorer: 'Investigation Explorer — FLAREX',
       detail: `${selectedInvestigation.shortName} — FLAREX`,
       compare: 'Investigation Comparison — FLAREX',
-      data: 'Scientific Data Explorer — FLAREX',
-      assistant: 'FLAREX Research Intelligence — FLAREX',
-      gaps: 'Research Gap Explorer — FLAREX',
-      sources: 'Sources & References — FLAREX',
+      data: 'Trends & Data Quality — FLAREX',
+      graph: 'Scientific Knowledge Graph — FLAREX',
+      documents: 'Document Intelligence — FLAREX',
+      evidence: 'Evidence Engine — FLAREX',
+      assistant: 'AI Research Analyst — FLAREX',
+      gaps: 'Research Gap Intelligence — FLAREX',
+      workspace: 'Research Workspace — FLAREX',
+      export: 'Scientific Export Center — FLAREX',
+      sources: 'NASA Discovery & Sources — FLAREX',
       about: 'About & Transparency — FLAREX',
     };
     document.title = pageTitles[activePage] ?? 'FLAREX — Fire Learning and Research Explorer';
@@ -406,6 +579,7 @@ export default function App() {
         activePage === 'detail' ? selectedInvestigation.shortName : null
       }
       compareCount={compareIds.length}
+      workspaceCount={workspaceCount}
       shortcutsOpen={shortcutsOpen}
       onToggleShortcuts={handleToggleShortcuts}
       onCopyLink={handleCopyCurrentUrl}
@@ -440,11 +614,17 @@ export default function App() {
       {activePage === 'detail' && (
         <InvestigationDetails
           investigation={selectedInvestigation}
+          allInvestigations={INVESTIGATIONS}
           isCompared={compareIds.includes(selectedInvestigation.id)}
           compareFull={compareIds.length >= 3}
+          isSaved={workspace.savedInvestigationIds.includes(selectedInvestigation.id)}
           onToggleCompare={handleToggleCompare}
+          onToggleSave={handleToggleSaveInvestigation}
           onBackToExplorer={() => handleNavigate('explorer')}
           onAskAboutInvestigation={handleAskAboutInvestigation}
+          onOpenInvestigation={handleOpenInvestigation}
+          onOpenInGraph={handleOpenInGraph}
+          onExportProfile={() => handleExportReport('investigation_profile')}
         />
       )}
 
@@ -455,6 +635,8 @@ export default function App() {
             selectedIds={compareIds}
             onUpdateSelection={setCompareIds}
             onOpenInvestigation={handleOpenInvestigation}
+            onSaveComparison={handleSaveComparison}
+            onExportComparison={() => handleExportReport('comparison_report')}
           />
         </Suspense>
       )}
@@ -462,6 +644,31 @@ export default function App() {
       {activePage === 'data' && (
         <Suspense fallback={<LoadingSkeleton rows={4} />}>
           <ScientificDataExplorer
+            investigations={INVESTIGATIONS}
+            onOpenInvestigation={handleOpenInvestigation}
+          />
+        </Suspense>
+      )}
+
+      {activePage === 'graph' && (
+        <Suspense fallback={<LoadingSkeleton rows={4} />}>
+          <KnowledgeGraph
+            investigations={INVESTIGATIONS}
+            initialFocusId={graphFocusId}
+            onOpenInvestigation={handleOpenInvestigation}
+          />
+        </Suspense>
+      )}
+
+      {activePage === 'documents' && (
+        <Suspense fallback={<LoadingSkeleton rows={4} />}>
+          <DocumentIntelligence onOpenInvestigation={handleOpenInvestigation} />
+        </Suspense>
+      )}
+
+      {activePage === 'evidence' && (
+        <Suspense fallback={<LoadingSkeleton rows={4} />}>
+          <EvidenceEngine
             investigations={INVESTIGATIONS}
             onOpenInvestigation={handleOpenInvestigation}
           />
@@ -485,6 +692,36 @@ export default function App() {
           <ResearchGapExplorer
             investigations={INVESTIGATIONS}
             onOpenInvestigation={handleOpenInvestigation}
+            onAskAiQuestion={handleAskGapQuestion}
+          />
+        </Suspense>
+      )}
+
+      {activePage === 'workspace' && (
+        <Suspense fallback={<LoadingSkeleton rows={4} />}>
+          <ResearchWorkspace
+            investigations={INVESTIGATIONS}
+            workspace={workspace}
+            onToggleSaveInvestigation={handleToggleSaveInvestigation}
+            onRemoveBookmark={handleRemoveBookmarkUrl}
+            onSaveNote={handleSaveNote}
+            onDeleteNote={handleDeleteNote}
+            onCreateCollection={handleCreateCollection}
+            onDeleteCollection={handleDeleteCollection}
+            onLoadComparison={handleLoadComparison}
+            onOpenInvestigation={handleOpenInvestigation}
+            onNavigate={handleNavigate}
+          />
+        </Suspense>
+      )}
+
+      {activePage === 'export' && (
+        <Suspense fallback={<LoadingSkeleton rows={4} />}>
+          <ExportCenter
+            investigations={INVESTIGATIONS}
+            compareIds={compareIds}
+            workspace={workspace}
+            initialReportType={exportReportType}
           />
         </Suspense>
       )}
@@ -494,6 +731,8 @@ export default function App() {
           <SourcesReferences
             investigations={INVESTIGATIONS}
             onOpenInvestigation={handleOpenInvestigation}
+            bookmarkedSources={workspace.bookmarkedSources}
+            onToggleBookmark={handleToggleBookmarkSource}
           />
         </Suspense>
       )}

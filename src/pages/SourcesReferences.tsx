@@ -1,15 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Bookmark,
+  BookmarkCheck,
   BookOpen,
+  CheckCircle2,
   ExternalLink,
   FileText,
+  Globe,
   Search,
 } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
+import { Input, Select } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState, ErrorState, LoadingSkeleton } from '../components/ui/States';
 import {
@@ -19,18 +23,30 @@ import {
 } from '../data/researchCatalog';
 import { InvestigationRecord } from '../types/research';
 import {
+  buildDiscoveryIndex,
+  DiscoveryResourceItem,
+  filterDiscoveryResources,
+  NasaRepositoryId,
+} from '../utils/discoveryEngine';
+import {
   buildReferenceLibrary,
+  DOMAIN_CATEGORY_DEFS,
+  DomainCategoryId,
   filterReferences,
   ReferenceFilterCategory,
 } from '../utils/researchLogic';
+import { BookmarkedSourceEntry } from '../utils/workspaceStore';
 
 interface NtrsResult {
   id: number | null;
   title: string;
   publicationYear: number | null;
+  publicationDate?: string | null;
   stiType: string;
   center: string | null;
   authors?: string[];
+  doi?: string | null;
+  reportNumber?: string | null;
   abstractSnippet?: string | null;
   url: string;
 }
@@ -46,6 +62,8 @@ interface OsdrResult {
 interface SourcesReferencesProps {
   investigations: InvestigationRecord[];
   onOpenInvestigation: (id: string) => void;
+  bookmarkedSources?: BookmarkedSourceEntry[];
+  onToggleBookmark?: (entry: Omit<BookmarkedSourceEntry, 'savedAt'>) => void;
 }
 
 const REFERENCE_FILTER_TABS: Array<{
@@ -63,6 +81,8 @@ const REFERENCE_FILTER_TABS: Array<{
 export function SourcesReferences({
   investigations,
   onOpenInvestigation,
+  bookmarkedSources = [],
+  onToggleBookmark,
 }: SourcesReferencesProps) {
   const [ntrsQuery, setNtrsQuery] = useState('BASS-II microgravity combustion');
   const [ntrsLoading, setNtrsLoading] = useState(false);
@@ -80,6 +100,100 @@ export function SourcesReferences({
 
   const [refCategory, setRefCategory] = useState<ReferenceFilterCategory>('ALL');
   const [refSearch, setRefSearch] = useState('');
+
+  // Module 1 Unified NASA Research Discovery Engine state
+  const [discQuery, setDiscQuery] = useState('');
+  const [discRepo, setDiscRepo] = useState<NasaRepositoryId | 'ALL'>('ALL');
+  const [discCategory, setDiscCategory] = useState<DomainCategoryId | 'ALL'>('ALL');
+  const [discInvestigation, setDiscInvestigation] = useState('ALL');
+  const [discYear, setDiscYear] = useState('ALL');
+  const [discEvidence, setDiscEvidence] = useState('ALL');
+  const [discAvailability, setDiscAvailability] = useState('ALL');
+  const [expandedResourceId, setExpandedResourceId] = useState<string | null>(null);
+  const [linkStatusMap, setLinkStatusMap] = useState<
+    Record<string, { ok: boolean; status: number | null; note?: string; checking?: boolean }>
+  >({});
+
+  const discoveryIndex = useMemo(
+    () => buildDiscoveryIndex(investigations, OFFICIAL_RESOURCES, DOSSIER_REFERENCES),
+    [investigations]
+  );
+
+  const discYears = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          discoveryIndex
+            .map((d) => d.publicationYear)
+            .filter((y): y is number => typeof y === 'number')
+        )
+      ).sort((a, b) => b - a),
+    [discoveryIndex]
+  );
+
+  const filteredDiscovery = useMemo(
+    () =>
+      filterDiscoveryResources(discoveryIndex, {
+        query: discQuery,
+        repository: discRepo,
+        category: discCategory,
+        investigationId: discInvestigation,
+        year: discYear,
+        evidenceType: discEvidence,
+        dataAvailability: discAvailability,
+      }),
+    [
+      discoveryIndex,
+      discQuery,
+      discRepo,
+      discCategory,
+      discInvestigation,
+      discYear,
+      discEvidence,
+      discAvailability,
+    ]
+  );
+
+  const bookmarkedUrlSet = useMemo(
+    () => new Set(bookmarkedSources.map((b) => b.url)),
+    [bookmarkedSources]
+  );
+
+  const handleCheckUrl = async (item: DiscoveryResourceItem) => {
+    if (!item.url.startsWith('https://')) {
+      setLinkStatusMap((prev) => ({
+        ...prev,
+        [item.url]: { ok: true, status: 200, note: 'Bundled local asset' },
+      }));
+      return;
+    }
+    setLinkStatusMap((prev) => ({
+      ...prev,
+      [item.url]: { ok: false, status: null, checking: true },
+    }));
+    try {
+      const resp = await fetch('/api/check-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.url }),
+      });
+      const data = (await resp.json()) as {
+        results?: Array<{ url: string; ok: boolean; status: number | null; note?: string }>;
+      };
+      const hit = data.results?.[0];
+      if (hit) {
+        setLinkStatusMap((prev) => ({
+          ...prev,
+          [item.url]: { ok: hit.ok, status: hit.status, note: hit.note },
+        }));
+      }
+    } catch {
+      setLinkStatusMap((prev) => ({
+        ...prev,
+        [item.url]: { ok: false, status: null, note: 'Check failed' },
+      }));
+    }
+  };
 
   const allReferenceItems = useMemo(
     () => buildReferenceLibrary(investigations),
@@ -158,6 +272,249 @@ export function SourcesReferences({
           </div>
         }
       />
+
+      {/* Module 1: Advanced NASA Research Discovery Engine */}
+      <section aria-labelledby="discovery-engine-heading" className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2
+              id="discovery-engine-heading"
+              className="font-display text-[20px] font-semibold text-[var(--text-primary)] flex items-center gap-2"
+            >
+              <Globe className="w-4 h-4 text-[var(--accent-blue)]" aria-hidden="true" />
+              <span>Unified NASA Source Discovery Engine</span>
+            </h2>
+            <p className="text-[13px] text-[var(--text-secondary)]">
+              Discover publications, dataset metadata, DOIs, and repository links across NASA PSI, NTRS, PSI AWS Open Data, OSDR, and peer-reviewed journals.
+            </p>
+          </div>
+          <span className="font-mono-tabular text-xs text-[var(--text-muted)]">
+            {filteredDiscovery.length} of {discoveryIndex.length} indexed resources
+          </span>
+        </div>
+
+        <Card padding="sm" className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            <Input
+              type="search"
+              value={discQuery}
+              onChange={(e) => setDiscQuery(e.target.value)}
+              leadingIcon={<Search className="w-3.5 h-3.5" />}
+              placeholder="Search title, DOI, PSI, NTRS, author..."
+              aria-label="Search NASA discovery resources"
+            />
+            <Select
+              value={discRepo}
+              onChange={(e) => setDiscRepo(e.target.value as NasaRepositoryId | 'ALL')}
+              aria-label="Filter by repository"
+            >
+              <option value="ALL">All Repositories</option>
+              <option value="NASA_PSI">NASA PSI Portal</option>
+              <option value="NASA_NTRS">NASA NTRS</option>
+              <option value="NASA_PSI_AWS">NASA PSI AWS Open Data</option>
+              <option value="NASA_OSDR">NASA OSDR</option>
+              <option value="PEER_REVIEWED_JOURNAL">Peer-Reviewed Journals</option>
+              <option value="LOCAL_DOSSIER">Bundled Dossier Assets</option>
+            </Select>
+            <Select
+              value={discCategory}
+              onChange={(e) => setDiscCategory(e.target.value as DomainCategoryId | 'ALL')}
+              aria-label="Filter by research category"
+            >
+              <option value="ALL">All Research Categories</option>
+              {DOMAIN_CATEGORY_DEFS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={discInvestigation}
+              onChange={(e) => setDiscInvestigation(e.target.value)}
+              aria-label="Filter by investigation"
+            >
+              <option value="ALL">All Investigations</option>
+              {investigations.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.shortName}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={discYear}
+              onChange={(e) => setDiscYear(e.target.value)}
+              aria-label="Filter by publication year"
+            >
+              <option value="ALL">All Years</option>
+              {discYears.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={discEvidence}
+              onChange={(e) => setDiscEvidence(e.target.value)}
+              aria-label="Filter by evidence type"
+            >
+              <option value="ALL">All Evidence Types</option>
+              <option value="RAW DATA">RAW DATA</option>
+              <option value="PEER-REVIEWED PAPER">PEER-REVIEWED PAPER</option>
+              <option value="NASA INVESTIGATION DESCRIPTION">NASA INVESTIGATION DESCRIPTION</option>
+              <option value="PRESENTATION / ABSTRACT">PRESENTATION / ABSTRACT</option>
+              <option value="REVIEW PAPER">REVIEW PAPER</option>
+              <option value="COMPLEMENTARY TERRESTRIAL RESEARCH">COMPLEMENTARY TERRESTRIAL RESEARCH</option>
+            </Select>
+            <Select
+              value={discAvailability}
+              onChange={(e) => setDiscAvailability(e.target.value)}
+              aria-label="Filter by repository availability"
+            >
+              <option value="ALL">All Availability Statuses</option>
+              <option value="PUBLIC_IN_PSI">Public in NASA PSI</option>
+              <option value="PARTIAL_OR_NTRS">Partial / NTRS Reports</option>
+              <option value="ARCHIVED_OR_CONDITIONAL">Archived / Conditional</option>
+              <option value="PLANNED_NO_PUBLIC_DATA">Planned (No Public Data)</option>
+              <option value="TERRESTRIAL_LAB_ONLY">Terrestrial 1g Only</option>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDiscQuery('');
+                setDiscRepo('ALL');
+                setDiscCategory('ALL');
+                setDiscInvestigation('ALL');
+                setDiscYear('ALL');
+                setDiscEvidence('ALL');
+                setDiscAvailability('ALL');
+              }}
+            >
+              Reset Discovery Filters
+            </Button>
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {filteredDiscovery.slice(0, 12).map((item) => {
+            const isExpanded = expandedResourceId === item.id;
+            const isBookmarked = bookmarkedUrlSet.has(item.url);
+            const linkCheck = linkStatusMap[item.url];
+            return (
+              <Card key={item.id} padding="sm" className="space-y-2.5 flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                    <Badge tone="cyan">{item.repositoryLabel}</Badge>
+                    <span className="font-mono-tabular text-[var(--text-muted)]">
+                      {item.publicationDateDisplay}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)] leading-snug">
+                    {item.title}
+                  </h3>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    {item.investigationShortName} · {item.evidenceType} · {item.researchCategoryLabel}
+                  </p>
+                  {isExpanded && (
+                    <div className="p-2.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1 text-xs text-[var(--text-secondary)]">
+                      <p>{item.summary}</p>
+                      <p className="font-mono-tabular text-[11px] text-[var(--text-muted)]">
+                        Authors/Lead: {item.authorsOrOrganization.join(', ')}
+                        {item.psiId ? ` · PSI ${item.psiId}` : ''}
+                        {item.ntrsId ? ` · NTRS ${item.ntrsId}` : ''}
+                        {item.doi ? ` · DOI ${item.doi}` : ''}
+                      </p>
+                      <p className="text-[11px] text-[var(--text-muted)]">
+                        Availability: {item.dataAvailabilityLabel}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedResourceId((cur) => (cur === item.id ? null : item.id))
+                      }
+                      className="text-[var(--accent-blue)] hover:underline font-medium cursor-pointer"
+                    >
+                      {isExpanded ? 'Hide Details' : 'Source Details'}
+                    </button>
+                    {item.investigationId && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenInvestigation(item.investigationId!)}
+                        className="text-[var(--text-secondary)] hover:text-[var(--accent-blue)] cursor-pointer"
+                      >
+                        Study Profile
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleCheckUrl(item)}
+                      className="text-[var(--text-muted)] hover:text-[var(--accent-blue)] cursor-pointer"
+                    >
+                      {linkCheck?.checking ? 'Checking…' : 'Check Availability'}
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {linkCheck && !linkCheck.checking && (
+                      <span
+                        className={`font-mono-tabular text-[11px] inline-flex items-center gap-1 ${
+                          linkCheck.ok ? 'text-[var(--status-success)]' : 'text-[var(--status-warning)]'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                        {linkCheck.status ? `HTTP ${linkCheck.status}` : linkCheck.note}
+                      </span>
+                    )}
+                    {onToggleBookmark && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onToggleBookmark({
+                            id: item.id,
+                            title: item.title,
+                            url: item.url,
+                            repository: item.repositoryLabel,
+                            investigationId: item.investigationId,
+                          })
+                        }
+                        aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark source'}
+                        className="text-[var(--text-secondary)] hover:text-[var(--accent-cyan)] cursor-pointer"
+                      >
+                        {isBookmarked ? (
+                          <BookmarkCheck className="w-3.5 h-3.5 text-[var(--accent-cyan)]" aria-hidden="true" />
+                        ) : (
+                          <Bookmark className="w-3.5 h-3.5" aria-hidden="true" />
+                        )}
+                      </button>
+                    )}
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-[var(--accent-blue)] hover:underline"
+                    >
+                      <span>Open</span>
+                      <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                    </a>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+        {filteredDiscovery.length > 12 && (
+          <p className="text-xs text-[var(--text-muted)]">
+            Showing top 12 of {filteredDiscovery.length} matching resources. Refine filters above to narrow results.
+          </p>
+        )}
+      </section>
 
       {/* Filterable Unified Reference Library */}
       <section aria-labelledby="reference-library-heading" className="space-y-4">
@@ -367,9 +724,11 @@ export function SourcesReferences({
                       </p>
                       <p className="text-xs text-[var(--text-secondary)]">
                         {item.stiType}
-                        {item.publicationYear ? ` · ${item.publicationYear}` : ''}
+                        {item.publicationDate ? ` · ${item.publicationDate}` : item.publicationYear ? ` · ${item.publicationYear}` : ''}
                         {item.center ? ` · ${item.center}` : ''}
                         {item.id ? ` · NTRS ID ${item.id}` : ''}
+                        {item.reportNumber ? ` · ${item.reportNumber}` : ''}
+                        {item.doi ? ` · DOI ${item.doi}` : ''}
                       </p>
                       {item.authors && item.authors.length > 0 && (
                         <p className="text-[11px] text-[var(--text-muted)]">

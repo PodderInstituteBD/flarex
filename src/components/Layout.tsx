@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
+  BookmarkCheck,
   BookOpen,
   Check,
+  Download,
+  FileSearch,
   GitCompare,
   Info,
   Keyboard,
@@ -12,8 +15,10 @@ import {
   Menu,
   MessageSquareText,
   Moon,
+  Network,
   PanelLeftClose,
   PanelLeftOpen,
+  Scale,
   Search,
   ShieldAlert,
   Sun,
@@ -36,8 +41,13 @@ export type AppPage =
   | 'detail'
   | 'compare'
   | 'data'
+  | 'graph'
+  | 'documents'
+  | 'evidence'
   | 'assistant'
   | 'gaps'
+  | 'workspace'
+  | 'export'
   | 'sources'
   | 'about';
 
@@ -47,7 +57,7 @@ interface NavItem {
   shortLabel: string;
   Icon: typeof LayoutDashboard;
   shortcut?: string;
-  group: 'OVERVIEW' | 'RESEARCH' | 'INTELLIGENCE' | 'INFORMATION';
+  group: 'OVERVIEW' | 'RESEARCH' | 'INTELLIGENCE' | 'WORKSPACE' | 'INFORMATION';
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -77,32 +87,72 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'data',
-    label: 'Scientific Data Explorer',
-    shortLabel: 'Data Explorer',
+    label: 'Trends & Data Quality',
+    shortLabel: 'Data & Quality',
     Icon: BarChart3,
     shortcut: 'D',
     group: 'RESEARCH',
   },
   {
     id: 'gaps',
-    label: 'Research Gap Explorer',
+    label: 'Research Gap Intelligence',
     shortLabel: 'Research Gaps',
     Icon: ShieldAlert,
     shortcut: 'G',
     group: 'RESEARCH',
   },
   {
+    id: 'graph',
+    label: 'Knowledge Graph',
+    shortLabel: 'Graph',
+    Icon: Network,
+    shortcut: 'K',
+    group: 'INTELLIGENCE',
+  },
+  {
+    id: 'documents',
+    label: 'Document Intelligence',
+    shortLabel: 'Documents',
+    Icon: FileSearch,
+    shortcut: 'L',
+    group: 'INTELLIGENCE',
+  },
+  {
+    id: 'evidence',
+    label: 'Evidence Engine',
+    shortLabel: 'Evidence',
+    Icon: Scale,
+    shortcut: 'E',
+    group: 'INTELLIGENCE',
+  },
+  {
     id: 'assistant',
-    label: 'AI Research Assistant',
-    shortLabel: 'AI Intelligence',
+    label: 'AI Research Analyst',
+    shortLabel: 'AI Analyst',
     Icon: MessageSquareText,
     shortcut: 'A',
     group: 'INTELLIGENCE',
   },
   {
+    id: 'workspace',
+    label: 'Research Workspace',
+    shortLabel: 'Workspace',
+    Icon: BookmarkCheck,
+    shortcut: 'W',
+    group: 'WORKSPACE',
+  },
+  {
+    id: 'export',
+    label: 'Scientific Export Center',
+    shortLabel: 'Export',
+    Icon: Download,
+    shortcut: 'X',
+    group: 'WORKSPACE',
+  },
+  {
     id: 'sources',
-    label: 'Sources & References',
-    shortLabel: 'Sources',
+    label: 'NASA Discovery & Sources',
+    shortLabel: 'Discovery',
     Icon: BookOpen,
     group: 'INFORMATION',
   },
@@ -122,7 +172,8 @@ const NAV_GROUPS: Array<{
   { key: 'OVERVIEW', heading: 'Overview' },
   { key: 'RESEARCH', heading: 'Research' },
   { key: 'INTELLIGENCE', heading: 'Intelligence' },
-  { key: 'INFORMATION', heading: 'Information' },
+  { key: 'WORKSPACE', heading: 'Workspace & Export' },
+  { key: 'INFORMATION', heading: 'NASA Discovery & Info' },
 ];
 
 export interface CopyToastState {
@@ -139,6 +190,7 @@ interface LayoutProps {
   onGlobalSearchSubmit: (query: string) => void;
   breadcrumbDetail?: string | null;
   compareCount: number;
+  workspaceCount?: number;
   shortcutsOpen: boolean;
   onToggleShortcuts: (open?: boolean) => void;
   onCopyLink: () => void;
@@ -158,6 +210,7 @@ export function Layout({
   onGlobalSearchSubmit,
   breadcrumbDetail,
   compareCount,
+  workspaceCount = 0,
   shortcutsOpen,
   onToggleShortcuts,
   onCopyLink,
@@ -349,6 +402,8 @@ export function Layout({
                     const navAriaLabel = `${label}${
                       id === 'compare' && compareCount > 0
                         ? ` (${compareCount} selected)`
+                        : id === 'workspace' && workspaceCount > 0
+                        ? ` (${workspaceCount} saved)`
                         : ''
                     }${shortcut ? ` (Shortcut: ${shortcut})` : ''}`;
 
@@ -401,6 +456,11 @@ export function Layout({
                             {id === 'compare' && compareCount > 0 && (
                               <span className="font-mono-tabular text-[11px] px-1.5 py-0.5 rounded-[6px] bg-[var(--bg-elevated)] text-[var(--accent-blue)] border border-[var(--border-subtle)]">
                                 {compareCount}
+                              </span>
+                            )}
+                            {id === 'workspace' && workspaceCount > 0 && (
+                              <span className="font-mono-tabular text-[11px] px-1.5 py-0.5 rounded-[6px] bg-[var(--bg-elevated)] text-[var(--accent-cyan)] border border-[var(--border-subtle)]">
+                                {workspaceCount}
                               </span>
                             )}
                             {shortcut && !isMobile && (
@@ -474,7 +534,7 @@ export function Layout({
       {/* Desktop persistent collapsible sidebar */}
       <aside
         aria-label="Sidebar navigation"
-        className={`hidden lg:block shrink-0 sticky top-0 h-screen transition-[width] duration-200 ${
+        className={`print:hidden hidden lg:block shrink-0 sticky top-0 h-screen transition-[width] duration-200 ${
           sidebarCollapsed ? 'lg:w-[74px]' : 'lg:w-[276px]'
         }`}
       >
@@ -575,7 +635,7 @@ export function Layout({
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top Header */}
-        <header className="sticky top-0 z-30 h-14 bg-[var(--bg-secondary)]/95 backdrop-blur-sm border-b border-[var(--border-subtle)] px-4 lg:px-8 flex items-center justify-between gap-3">
+        <header className="print:hidden sticky top-0 z-30 h-14 bg-[var(--bg-secondary)]/95 backdrop-blur-sm border-b border-[var(--border-subtle)] px-4 lg:px-8 flex items-center justify-between gap-3">
           {/* Breadcrumb + Mobile trigger */}
           <div className="flex items-center gap-2.5 min-w-0">
             <button
@@ -752,7 +812,7 @@ export function Layout({
           </div>
         </main>
 
-        <footer className="border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)]/60 px-4 sm:px-6 lg:px-8 py-5">
+        <footer className="print:hidden border-t border-[var(--border-subtle)] bg-[var(--bg-secondary)]/60 px-4 sm:px-6 lg:px-8 py-5">
           <div className="max-w-[1280px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-[var(--text-secondary)]">
             <p>
               FLAREX (Fire Learning and Research Explorer) · Independent student research platform for NASA Space Apps Challenge 2026. Not affiliated with or endorsed by NASA.

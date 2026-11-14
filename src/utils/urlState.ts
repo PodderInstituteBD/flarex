@@ -13,8 +13,13 @@ const VALID_PAGES = new Set<AppPage>([
   'detail',
   'compare',
   'data',
+  'graph',
+  'documents',
+  'evidence',
   'assistant',
   'gaps',
+  'workspace',
+  'export',
   'sources',
   'about',
 ]);
