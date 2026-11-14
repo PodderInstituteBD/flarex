@@ -1,0 +1,6 @@
+{
+  "name": "FLAREX — Fire Learning and Research Explorer",
+  "description": "Independent student research platform turning NASA microgravity combustion dossiers and PSI metadata into structured spacecraft fire safety insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

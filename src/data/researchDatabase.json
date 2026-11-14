@@ -1,0 +1,1375 @@
+{
+  "databaseTitle": "FLAREX Microgravity Combustion Research Database",
+  "sourceDocument": "/assets/aistudio/flarex_research_database_def47b9d.json",
+  "sourceDocumentTitle": "FLAREX Structured Research Database & Flame-in-Freefall Dossier",
+  "records": [
+    {
+      "id": "bass-ii",
+      "slug": "bass-ii",
+      "name": "BASS / BASS-II (Burning and Suppression of Solids)",
+      "shortName": "BASS / BASS-II",
+      "family": "Solid Fuel Flammability & Extinguishment",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "PRESENTATION / ABSTRACT",
+      "evidenceTypes": [
+        "PRESENTATION / ABSTRACT",
+        "NASA INVESTIGATION DESCRIPTION",
+        "PEER-REVIEWED PAPER"
+      ],
+      "platform": "International Space Station (Microgravity Science Glovebox) & Space Shuttle",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "2014–2016 (BASS-II; Oct 2014 NTRS Report)",
+      "startYear": 2014,
+      "endYear": 2016,
+      "dataAvailability": "PUBLIC_IN_PSI",
+      "dataAvailabilityLabel": "Released in NASA PSI (ID 13000263), NTRS 20160000593 & NASA TM (2021)",
+      "hasQuantitativeSummary": true,
+      "hasRawNumericalDataset": false,
+      "psiId": "13000263",
+      "doi": null,
+      "ntrsDocumentId": "20160000593",
+      "reportNumber": "GRC-E-DAA-TN18274",
+      "publicationDate": "2014-10-23",
+      "authors": [
+        "Paul V. Ferkul",
+        "Subrata Bhattacharjee",
+        "Carlos Fernandez-Pello",
+        "Fletcher Miller",
+        "Sandra L. Olson",
+        "Fumiaki Takahashi",
+        "James S. T’ien"
+      ],
+      "sourceUrl": "https://ntrs.nasa.gov/search?q=20160000593",
+      "secondaryUrls": [
+        {
+          "label": "NASA PSI Repository (ID 13000263)",
+          "url": "https://psi.nasa.gov/physci/repo"
+        },
+        {
+          "label": "NASA PSI AWS Open Data",
+          "url": "https://registry.opendata.aws/nasa-psi/"
+        }
+      ],
+      "sourceLabel": "NTRS 20160000593 (GRC-E-DAA-TN18274, 2014-10-23), NASA TM (2021) & NASA PSI",
+      "overview": "Investigated solid-material flame behavior, growth, and extinction in microgravity aboard Space Shuttle and ISS Microgravity Science Glovebox (BASS-II, 2014–2016) under varying airflow and sample conditions.",
+      "scientificPurpose": "Measure microgravity solid-material flame behavior, flame spread rates, soot generation, and extinction boundaries under varied airflow, oxygen concentration, fuel thickness, and preheating.",
+      "background": "Understanding how small solid fires behave and extinguish in ventilated microgravity cabins is foundational for ISS and exploration spacecraft fire protocols.",
+      "fuels": [
+        "Cotton",
+        "Wire insulation",
+        "Acrylic slabs",
+        "H2 / Mg / cotton (cited in NASA TM summary)"
+      ],
+      "materialsAndGeometry": "Thin and thick flat samples, acrylic slabs, spheres, and cylinders tested in opposed and concurrent microgravity flow.",
+      "environmentalVariables": [
+        "Airflow speed (0–5 cm/s sensitivity; dim blue flames < 1 cm/s)",
+        "Fuel thickness & fuel preheating",
+        "Oxygen concentration",
+        "Opposed and concurrent flow configuration"
+      ],
+      "sensors": [
+        "Flame video cameras (appearance, growth & spread)",
+        "O2 gas concentration traces",
+        "CO2 gas concentration traces"
+      ],
+      "hardware": "ISS Microgravity Science Glovebox (MSG) with modular fan-driven flow duct; archived under PSI ID 13000263.",
+      "measurementMethods": "Flame imagery/videos paired with extinction behavior observations, O2/CO2 gas concentration traces, and heat release rate analysis.",
+      "reportedFindings": "Flames were sensitive to airflow speed in the 0–5 cm/s range in reported tests; some flames persisted below 1 cm/s as dim blue stable flames whose behavior changed with sudden airflow increases. A 2021 NASA report also noted extended flammability, higher soot, and limit heat release rates under 100 W.",
+      "scientificRelevance": "Demonstrates that low-velocity cabin ventilation (< 5 cm/s) can sustain dim blue solid-fuel flames and alter extinction margins, directly informing spacecraft ventilation and suppression protocols.",
+      "limitations": [
+        "Supplied NTRS record (20160000593) is a presentation/abstract, not a raw numerical dataset; do not fabricate time series or chart values.",
+        "Microgravity only: does not provide direct Lunar or Martian partial-gravity data.",
+        "Raw video/CSV sensor traces reside in NASA PSI (ID 13000263) and are not bundled locally."
+      ],
+      "quantitativeData": [
+        {
+          "id": "bass-airflow-range",
+          "label": "Reported Airflow Sensitivity Window",
+          "kind": "EXPERIMENTAL_CONDITION_RANGE",
+          "valueDisplay": "0–5 cm/s (dim flames < 1 cm/s)",
+          "min": 0,
+          "max": 5,
+          "unit": "cm/s",
+          "conditionContext": "Airflow speed sensitivity range documented in BASS-II presentation/abstract (NTRS 20160000593); sudden airflow increases altered dim blue flames persisting below 1 cm/s.",
+          "sourceCitation": "Ferkul et al. (2014), NTRS 20160000593 / GRC-E-DAA-TN18274",
+          "qualityNote": "Presentation summary range; raw velocity/time-series traces reside in NASA PSI ID 13000263."
+        },
+        {
+          "id": "bass-limit-hrr",
+          "label": "Extinguishment Limit Heat Release Rate",
+          "kind": "PUBLISHED_THRESHOLD",
+          "valueDisplay": "< 100 W",
+          "max": 100,
+          "unit": "W",
+          "conditionContext": "Reported in 2021 NASA Technical Memorandum for small solid-fuel microgravity extinguishment limits.",
+          "sourceCitation": "NASA Glenn Research Center Technical Memorandum (2021), Dossier p. 1 & p. 3",
+          "qualityNote": "Published threshold summary only; raw time-series O2/CO2 CSV traces reside in NASA PSI ID 13000263."
+        }
+      ],
+      "tags": [
+        "solid fuels",
+        "extinguishment",
+        "soot",
+        "forced flow",
+        "cotton",
+        "wire insulation",
+        "acrylic",
+        "PSI 13000263",
+        "NTRS 20160000593"
+      ]
+    },
+    {
+      "id": "saffire",
+      "slug": "saffire",
+      "name": "SAFFIRE (Spacecraft Fire Experiments I–III & Overview)",
+      "shortName": "SAFFIRE",
+      "family": "Large-Scale Spacecraft Fire Safety",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "PEER-REVIEWED PAPER",
+      "evidenceTypes": [
+        "PEER-REVIEWED PAPER",
+        "PRESENTATION / ABSTRACT",
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "Uncrewed Cygnus Cargo Spacecraft (post-ISS departure)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "2016–2021 (Saffire-I OA-6 launch 2016-03-22)",
+      "startYear": 2016,
+      "endYear": 2021,
+      "dataAvailability": "PARTIAL_OR_NTRS",
+      "dataAvailabilityLabel": "Saffire-I/II partially in PSI (13000367/68) & NTRS 20180005168",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": "13000367 / 13000368",
+      "doi": null,
+      "ntrsDocumentId": "20180005168",
+      "reportNumber": "GRC-E-DAA-TN48184",
+      "publicationDate": "2017-10-25",
+      "authors": [
+        "David L. Urban",
+        "Paul Ferkul",
+        "Sandra Olson",
+        "Gary A. Ruff",
+        "John Easton"
+      ],
+      "historicalNotes": [
+        "Saffire-I launched aboard Cygnus OA-6 on 2016-03-22, berthed with ISS on 2016-03-25, and was initiated after unberthing via ground command with telemetry downlink before re-entry.",
+        "Supplied 2016 paper described Saffire-IV/V/VI as planned follow-on work; those historical plans must not be presented as proof of completion without independent verification."
+      ],
+      "sourceUrl": "https://ntrs.nasa.gov/search?q=20180005168",
+      "secondaryUrls": [
+        {
+          "label": "Saffire Operation & Development Status (NTRS)",
+          "url": "https://ntrs.nasa.gov/search?q=Operation%20and%20Development%20Status%20of%20the%20Spacecraft%20Fire%20Experiments"
+        },
+        {
+          "label": "NASA PSI Repository (13000367/68)",
+          "url": "https://psi.nasa.gov/physci/repo"
+        }
+      ],
+      "sourceLabel": "NTRS 20180005168 (GRC-E-DAA-TN48184), Saffire Status Paper & PSI",
+      "overview": "Large-scale microgravity material flammability experiments aboard uncrewed Cygnus cargo vehicles after ISS departure using ground-commanded initiation and pre-reentry telemetry downlink.",
+      "scientificPurpose": "Demonstrate realistic spacecraft-scale fire length behavior, study whether flame growth reaches a steady size, and evaluate enclosure influence on flame spread and oxygen flammability limits.",
+      "background": "ISS combustion racks restrict flame size for crew safety; uncrewed Cygnus vehicles allowed NASA Glenn researchers to test larger materials separated from crewed vehicles.",
+      "fuels": [
+        "Saffire-I/III: 75% cotton / 25% fiberglass composite fabric (~0.4 m × 0.94 m, ~0.21 O2)",
+        "Saffire-II: 9 samples (~5 cm × 29 cm) of PMMA, silicone, composite fabric, and Nomex"
+      ],
+      "materialsAndGeometry": "Large composite fabric (~0.4 m × 0.94 m) for Saffire-I/III and nine 5 cm × 29 cm multi-material samples for Saffire-II inside spacious Cygnus enclosure.",
+      "environmentalVariables": [
+        "Nominal cabin oxygen near 0.21 mole fraction (Saffire-I/III)",
+        "Low-gravity maximum oxygen concentration limits (Saffire-II)",
+        "Enclosure geometry & vehicle venting"
+      ],
+      "sensors": [
+        "Inlet, flame-plume, and outlet temperature sensors",
+        "O2 and CO2 concentration sensors",
+        "Pressure transducer & two anemometers",
+        "Two video cameras & green LED pyrolysis-length measurement",
+        "Four radiometers & thermocouples for flame stand-off distance"
+      ],
+      "hardware": "Uncrewed Cygnus large-scale fire test bay with ground-commanded ignition and telemetry downlink.",
+      "measurementMethods": "Camera imagery as primary propagation/self-extinction diagnostic paired with O2/CO2, anemometer, radiometer, thermocouple, and pyrolysis-length telemetry.",
+      "reportedFindings": "Enclosure size around a sample had more influence on flame spread than anticipated in the supplied summary; camera imagery served as primary diagnostic for Saffire-II propagation or self-extinction. Source paper also catalogs 7 technology gaps (low/partial-gravity flammability, detection, suppression, emergency crew mask, post-fire monitoring, cleanup, fire modeling).",
+      "scientificRelevance": "Bridges small-sample rack tests to realistic spacecraft cabin volumes for vehicle-scale fire safety modeling.",
+      "limitations": [
+        "Supplied sources are presentation/paper excerpts rather than full raw numerical datasets; historical Saffire-IV/V/VI plans must remain labeled as plans.",
+        "Results cannot directly simulate partial gravity (Lunar/Martian); they validate microgravity volumes only.",
+        "Dataset availability is split across PSI (13000367/68) and NTRS publications."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "large scale",
+        "Cygnus",
+        "venting",
+        "PMMA",
+        "Nomex",
+        "cotton-fiberglass",
+        "PSI 13000367",
+        "NTRS 20180005168"
+      ]
+    },
+    {
+      "id": "same",
+      "slug": "same",
+      "name": "SAME / SAME-R (Smoke Aerosol Measurement Experiment)",
+      "shortName": "SAME / SAME-R",
+      "family": "Smoke, Aerosols & Fire Detection",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "PRESENTATION / ABSTRACT",
+      "evidenceTypes": [
+        "PRESENTATION / ABSTRACT",
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "International Space Station (ISS)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "ISS Expedition Era (post-DAFT 2004–2005)",
+      "startYear": null,
+      "endYear": null,
+      "dataAvailability": "ARCHIVED_OR_CONDITIONAL",
+      "dataAvailabilityLabel": "PSI ID 13000294 (archived; conditional public release note)",
+      "hasQuantitativeSummary": true,
+      "hasRawNumericalDataset": false,
+      "psiId": "13000294",
+      "doi": null,
+      "principalInvestigator": "Dr. David Urban (NASA Glenn Research Center) · Co-I: Dr. Zeng-Guang Yuan (NCMR) · Project Scientist: Dr. Gary Ruff (NASA GRC) · Partners: NIST, ZIN Technologies",
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search SAME on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=Smoke%20Aerosol%20Measurement%20Experiment%20SAME"
+        }
+      ],
+      "sourceLabel": "SAME / SAME-R Presentation Slides, NASA Overview & Technical Reports",
+      "overview": "Measured low-gravity smoke-particle size and morphology (SAME & SAME-R reflight) to define spacecraft smoke-detector requirements and reduce false alarms.",
+      "scientificPurpose": "Quantitatively determine low-gravity smoke particulate size (SAME) and obtain particle morphology while reducing size-distribution uncertainty against Shuttle experiments (SAME-R).",
+      "background": "Following DAFT feasibility verification, SAME operated autonomously via ground-uplinked parameters with periodic crew consumable changes.",
+      "fuels": [
+        "Smoke-generating test materials"
+      ],
+      "materialsAndGeometry": "Refurbished/new sample carousels and thermal precipitators.",
+      "environmentalVariables": [
+        "ISS cabin filtration environment",
+        "Microgravity aerosol transport"
+      ],
+      "sensors": [
+        "P-Trak particle counter & diagnostics unit",
+        "Thermal precipitators & sample carousels",
+        "Smoke detector comparison curves"
+      ],
+      "hardware": "SAME / SAME-R hardware with sample carousels, thermal precipitators, and diagnostics unit.",
+      "measurementMethods": "Autonomous ground-commanded particle size distribution and morphology sampling compared against smoke detector response curves.",
+      "reportedFindings": "ISS particulates were larger on average than in Shuttle flights (likely due to cabin filters). NASA reports also note smoke yields 5–8x higher soot in microgravity contexts, informing dust-vs-smoke discrimination algorithms.",
+      "scientificRelevance": "Essential for next-generation spacecraft smoke detectors (Artemis/Mars transit) to avoid false alarms from cabin dust while detecting true microgravity smoke.",
+      "limitations": [
+        "Supplied SAME/SAME-R slides do not provide numerical particle sizes or morphology values; milestone dates in slides are historical plans, not current schedules.",
+        "PSI particle count logs (ID 13000294) are listed as likely archived / conditional ('if released').",
+        "Dossier notes 5–8x higher soot spread as a study-specific range rather than a universal multiplier."
+      ],
+      "quantitativeData": [
+        {
+          "id": "same-soot-spread",
+          "label": "Reported Microgravity Smoke Soot Yield Factor",
+          "kind": "PUBLISHED_COMPARISON",
+          "valueDisplay": "5–8× higher soot",
+          "min": 5,
+          "max": 8,
+          "unit": "× baseline",
+          "conditionContext": "Cited in dossier validation notes (p. 6) referencing NASA SAME findings on sparse/inconsistent smoke yield spread.",
+          "sourceCitation": "NASA SAME Experiment Overview (Dossier p. 1, p. 3, p. 6)",
+          "qualityNote": "Published relative range factor; raw P-Trak vs. smoke detector CSV logs require PSI ID 13000294 access."
+        }
+      ],
+      "tags": [
+        "smoke detector",
+        "aerosol",
+        "particulates",
+        "morphology",
+        "thermal precipitator",
+        "P-Trak",
+        "PSI 13000294"
+      ]
+    },
+    {
+      "id": "flex-cfi-g",
+      "slug": "flex-cfi-g",
+      "name": "FLEX & CFI-G (Fuel Ignition & COOL Diffusion Flames)",
+      "shortName": "FLEX & CFI-G",
+      "family": "Droplet & Cool Diffusion Flames",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "PEER-REVIEWED PAPER",
+      "evidenceTypes": [
+        "PEER-REVIEWED PAPER",
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "International Space Station (ISS)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "FLEX series & CFI-G (2021)",
+      "startYear": 2021,
+      "endYear": 2021,
+      "dataAvailability": "PUBLIC_IN_PSI",
+      "dataAvailabilityLabel": "PSI (~130003xx) & UMD / Phys.org NASA-funded summary",
+      "hasQuantitativeSummary": true,
+      "hasRawNumericalDataset": false,
+      "psiId": "~130003xx (FLEX-2/C)",
+      "doi": null,
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search FLEX / Cool Flames on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=FLEX%20Cool%20Flame%20CFI-G"
+        }
+      ],
+      "sourceLabel": "NASA PSI & Univ. of Maryland / Phys.org Science Report",
+      "overview": "Liquid-droplet combustion (FLEX) and porous-burner (CFI-G) microgravity experiments studying near-limit diffusion flames, inert-gas suppression, and sustained low-temperature cool diffusion flames.",
+      "scientificPurpose": "Study near-limit diffusion flames, liquid-fuel droplet extinction, inert-gas suppressant effectiveness (CO2, He), chemical kinetics, and cool-flame combustion-model validation.",
+      "background": "FLEX unexpectedly revealed long-lived cool diffusion flames after hot flame extinction; CFI-G (2021) created sustained steady cool diffusion flames on porous burners aboard the ISS using up to 85% O2/N2 mixtures.",
+      "fuels": [
+        "Methanol (CH3OH)",
+        "Heptane (C7H16)",
+        "Rich premixed gaseous fuels on porous burners (CFI-G)"
+      ],
+      "materialsAndGeometry": "Isolated 2–5 mm liquid droplets (FLEX in MDCA/CIR) and porous spherical burner (CFI-G).",
+      "environmentalVariables": [
+        "Oxygen mole fraction: 0.10–0.50 (FLEX) & up to 85% O2/N2 spherical burner flow (CFI-G)",
+        "Ambient pressure: 0.5–1.0 atm",
+        "Diluents (N2, He) & Suppressants (CO2, He up to ~0.70 limit)",
+        "Low-temperature oxidation regime (~600–1000 K)"
+      ],
+      "sensors": [
+        "High-speed flame video cameras & radiation diagnostics",
+        "Soot concentration & soot temperature sensors",
+        "Chemiluminescence & gas species sensors (CO, CH2O)"
+      ],
+      "hardware": "ISS Combustion Integrated Rack (CIR) Multi-user Droplet Combustion Apparatus (MDCA) & CFI-G porous burner.",
+      "measurementMethods": "Droplet burning rate, extinction diameters, radiation, soot temperature/concentration, chemiluminescence, and CO / formaldehyde (CH2O) species diagnostics.",
+      "reportedFindings": "Discovered long-lived cool diffusion flames at ~600–1000 K; CFI-G created ~150 steady diffusion flames with distinct CO and CH2O chemistry. Documented FLEX ranges (0.10–0.50 O2, 0.5–1.0 atm, 2–5 mm droplets, CO2/He up to ~0.70) represent experimental variables rather than universal safety limits.",
+      "scientificRelevance": "Reveals fundamental low-temperature combustion regimes invisible in terrestrial gravity, informing chemical kinetics models and spacecraft smoldering/suppression boundaries.",
+      "limitations": [
+        "Experimental parameter ranges (0.10–0.50 O2, 0.5–1.0 atm, CO2/He suppressant concentration up to ~0.70) are experimental variables, NOT universal fire-suppression instructions or safety thresholds.",
+        "Microgravity behavior does NOT equal partial-gravity (Moon/Mars) data; CFI-G 85% O2/N2 flow is a specific inside-out burner configuration, not a general spacecraft atmosphere.",
+        "Specific FLEX-2/C PSI IDs are noted approximately (~130003xx) in the dossier; exact files require PSI access."
+      ],
+      "quantitativeData": [
+        {
+          "id": "flex-temp-range",
+          "label": "Cool Diffusion Flame Operating Temperature Range",
+          "kind": "EXPERIMENTAL_CONDITION_RANGE",
+          "valueDisplay": "~600–1000 K",
+          "min": 600,
+          "max": 1000,
+          "unit": "K",
+          "conditionContext": "Sustained low-temperature cool diffusion flame regime observed in FLEX / CFI-G microgravity tests.",
+          "sourceCitation": "FLEX / CFI-G (Dossier p. 1, Univ. of Maryland / Phys.org citing NASA ISS data)",
+          "qualityNote": "Published temperature regime range; raw chemiluminescence and CH2O spectra reside in NASA PSI."
+        },
+        {
+          "id": "flex-oxygen-range",
+          "label": "FLEX Experimental Oxygen Mole Fraction Range",
+          "kind": "EXPERIMENTAL_CONDITION_RANGE",
+          "valueDisplay": "0.10–0.50 O2",
+          "min": 0.1,
+          "max": 0.5,
+          "unit": "mole fraction",
+          "conditionContext": "Experimental test matrix variable for methanol and heptane droplets in FLEX (0.5–1.0 atm, 2–5 mm droplets).",
+          "sourceCitation": "NASA FLEX Investigation Description (flarex_research_database)",
+          "qualityNote": "Experimental input range ONLY, not a safety limit or universal extinguishment threshold."
+        },
+        {
+          "id": "flex-pressure-range",
+          "label": "FLEX Experimental Pressure Range",
+          "kind": "EXPERIMENTAL_CONDITION_RANGE",
+          "valueDisplay": "0.5–1.0 atm",
+          "min": 0.5,
+          "max": 1.0,
+          "unit": "atm",
+          "conditionContext": "Chamber ambient pressure test matrix for FLEX liquid-droplet combustion.",
+          "sourceCitation": "NASA FLEX Investigation Description (flarex_research_database)",
+          "qualityNote": "Experimental condition variable ONLY, not a spacecraft cabin design specification."
+        },
+        {
+          "id": "cfig-flame-count",
+          "label": "Steady Diffusion Flames Created (CFI-G)",
+          "kind": "PUBLISHED_TEST_COUNT",
+          "valueDisplay": "~150 flames",
+          "numericValue": 150,
+          "unit": "flames",
+          "conditionContext": "Created on porous burners during CFI-G ISS campaign (2021) as reported by UMD / Phys.org.",
+          "sourceCitation": "CFI-G / UMD Phys.org Report (Dossier p. 1)",
+          "qualityNote": "Approximate reported experimental count (~150), not a raw telemetry table."
+        }
+      ],
+      "tags": [
+        "cool flames",
+        "droplet combustion",
+        "methanol",
+        "heptane",
+        "CH2O",
+        "CO2 suppressant",
+        "MDCA",
+        "FLEX",
+        "CFI-G"
+      ]
+    },
+    {
+      "id": "flex-2-family",
+      "slug": "flex-2-family",
+      "name": "FLEX-2, FLEX-2J & FLEX-ICE-GA (Extended Droplet Combustion)",
+      "shortName": "FLEX-2 / 2J / ICE-GA",
+      "family": "Droplet & Cool Diffusion Flames",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "ISS Combustion Integrated Rack (MDCA)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "Post-FLEX ISS Campaigns",
+      "startYear": null,
+      "endYear": null,
+      "dataAvailability": "PUBLIC_IN_PSI",
+      "dataAvailabilityLabel": "NASA Investigation Descriptions (NASA / JAXA / ASI Collaborations)",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": "Listed under FLEX-2 / MDCA in NASA PSI",
+      "doi": null,
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search FLEX-2 / FLEX-2J on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=FLEX-2%20FLEX-2J%20FLEX-ICE-GA"
+        }
+      ],
+      "sourceLabel": "NASA PSI Investigation Descriptions (FLEX-2, FLEX-2J, FLEX-ICE-GA)",
+      "overview": "Extends FLEX droplet-combustion research to representative fuel mixtures, convective flow effects, 1D droplet arrays (NASA/JAXA FLEX-2J), and bio-derived surrogate fuels (ASI FLEX-ICE-GA).",
+      "scientificPurpose": "Investigate multi-component fuel interactions, soot formation under convective flow, flame spread along droplet arrays, and green/bio-derived fuel surrogates in microgravity.",
+      "background": "Follow-on campaigns utilizing the Multi-user Droplet Combustion Apparatus (MDCA) inside ISS CIR with international partners JAXA and the Italian Space Agency (ASI).",
+      "fuels": [
+        "Pure fuels & binary fuel mixtures (FLEX-2)",
+        "50:50 n-heptane / ethanol surrogate mixture (FLEX-ICE-GA)",
+        "50:50 n-hexanol / n-decane surrogate mixture (FLEX-ICE-GA)"
+      ],
+      "materialsAndGeometry": "Binary droplet arrays (FLEX-2) and 1D arrays of three fixed droplets plus movable droplets (FLEX-2J).",
+      "environmentalVariables": [
+        "Convective flow velocity & droplet spacing",
+        "Ambient pressure and gas composition",
+        "Microgravity inside ISS CIR MDCA"
+      ],
+      "sensors": [
+        "Droplet motion & burning-time optical diagnostics",
+        "Flame-spread and spacing tracking",
+        "Chamber pressure and gas composition sensors"
+      ],
+      "hardware": "Multi-user Droplet Combustion Apparatus (MDCA) in ISS Combustion Integrated Rack (CIR).",
+      "measurementMethods": "Tracking droplet motion, burning time, flame spread rates along 1D droplet arrays, spacing, pressure, and gas composition.",
+      "reportedFindings": "Supplied database records document configurations and partner test scopes (pure/mixed droplets, 3 fixed + movable array geometry in FLEX-2J, 50:50 surrogate blends in FLEX-ICE-GA); raw numerical outcomes reside in external PSI archives.",
+      "scientificRelevance": "Extends idealized single-droplet microgravity combustion toward practical spacecraft/propulsion fuel mixtures and multi-droplet flame spread.",
+      "limitations": [
+        "Configuration descriptions and planned test group counts are not equivalent to measured results; do not create synthetic experiment outcomes.",
+        "Microgravity only (no partial-gravity data).",
+        "No raw numerical dataset embedded in the loaded JSON database."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "FLEX-2",
+        "FLEX-2J",
+        "FLEX-ICE-GA",
+        "JAXA",
+        "ASI",
+        "droplet array",
+        "n-heptane",
+        "ethanol",
+        "MDCA"
+      ]
+    },
+    {
+      "id": "acme-bre",
+      "slug": "acme-bre",
+      "name": "ACME — BRE (Burning Rate Emulator)",
+      "shortName": "ACME — BRE",
+      "family": "ACME Laminar Diffusion Flame Suite",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "ISS Combustion Integrated Rack (CIR)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "2017–2026 (ACME Suite)",
+      "startYear": 2017,
+      "endYear": 2026,
+      "dataAvailability": "PUBLIC_IN_PSI",
+      "dataAvailabilityLabel": "Flame heat flux & surface temps vs. gas flow in PSI",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": "Listed in PSI (ID requires login)",
+      "doi": null,
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search ACME BRE on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=ACME%20Burning%20Rate%20Emulator%20BRE"
+        }
+      ],
+      "sourceLabel": "NASA ACME Project Description",
+      "overview": "Simulates solid-fuel burning in microgravity using a flat porous gas burner inside the ISS Combustion Integrated Rack.",
+      "scientificPurpose": "Improve fundamental understanding of solid materials flammability (such as paper and plastic analogs) in low gravity by controlling gaseous fuel flow to emulate solid pyrolysis.",
+      "background": "Part of the Advanced Combustion via Microgravity Experiments (ACME) laminar diffusion-flame suite aiming to improve combustion models and spacecraft fire prevention.",
+      "fuels": [
+        "Gaseous fuel analogs simulating paper and plastic solid fuels"
+      ],
+      "materialsAndGeometry": "Porous gas burner emulating solid fuel surface regression and heat feedback.",
+      "environmentalVariables": [
+        "Gaseous fuel flow rate",
+        "Microgravity inside ISS CIR"
+      ],
+      "sensors": [
+        "Heat flux sensors",
+        "Surface temperature instrumentation"
+      ],
+      "hardware": "ISS Combustion Integrated Rack (CIR) porous gas burner insert.",
+      "measurementMethods": "Measurement of flame heat flux and burner surface temperatures versus controlled gas flow to identify ignition and extinction limits.",
+      "reportedFindings": "Dossier confirms BRE data (flame heat flux and surface temperatures vs. gas flow) are in PSI to characterize ignition and extinction of paper/plastic analogs.",
+      "scientificRelevance": "Bridges simplified gaseous diffusion flames and complex solid-fuel flammability screening in spacecraft atmospheres.",
+      "limitations": [
+        "Emulates solid-fuel burning via a porous gas burner rather than testing actual solid pyrolysis kinetics directly.",
+        "Microgravity only (no partial-gravity data).",
+        "NASA sources conflict on whether the broader ACME suite has five or six experiments."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "ACME",
+        "BRE",
+        "CIR",
+        "flammability",
+        "heat flux",
+        "porous burner"
+      ]
+    },
+    {
+      "id": "acme-efield",
+      "slug": "acme-efield",
+      "name": "ACME — E-FIELD Flames (Electric-Field Effects)",
+      "shortName": "ACME — E-FIELD Flames",
+      "family": "ACME Laminar Diffusion Flame Suite",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "ISS Combustion Integrated Rack (CIR)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "2017–2026 (ACME Suite)",
+      "startYear": 2017,
+      "endYear": 2026,
+      "dataAvailability": "PARTIAL_OR_NTRS",
+      "dataAvailabilityLabel": "Ion currents & flame images; ACME release ongoing after analysis",
+      "hasQuantitativeSummary": true,
+      "hasRawNumericalDataset": false,
+      "psiId": "ACME suite (PSI release pending full analysis)",
+      "doi": null,
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search E-FIELD Flames on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=ACME%20E-FIELD%20Flames"
+        }
+      ],
+      "sourceLabel": "NASA ACME Project Description",
+      "overview": "Studies ion-induced electric winds on microgravity coflow laminar diffusion flames by applying high-voltage electric fields up to 10 kV.",
+      "scientificPurpose": "Understand flame ion production and electric-field flame control for emissions reduction and fundamental combustion physics.",
+      "background": "Removing buoyancy in microgravity isolates subtle electrostatic ion forces ('electric wind') that alter flame shape and soot behavior.",
+      "fuels": [
+        "Coflow laminar gaseous diffusion flame fuels"
+      ],
+      "materialsAndGeometry": "Coflow laminar burner inside ISS CIR with high-voltage electrode assembly.",
+      "environmentalVariables": [
+        "Applied electric field voltage (up to 10 kV)",
+        "Microgravity inside ISS CIR"
+      ],
+      "sensors": [
+        "Ion current measurement probes",
+        "Flame shift imaging cameras"
+      ],
+      "hardware": "ISS CIR high-voltage electric-field coflow burner assembly.",
+      "measurementMethods": "Recording flame ion currents versus applied voltage alongside flame shift and soot morphology images.",
+      "reportedFindings": "An applied electric field up to 10 kV alters flame shape and soot behavior via ion-induced electric winds; full ACME datasets appear in PSI after analysis.",
+      "scientificRelevance": "Clarifies flame ion chemistry and active electrostatic flame control; NOT a simulation of partial gravity.",
+      "limitations": [
+        "CRITICAL: E-FIELD Flames tests electrostatic ion winds in microgravity — it must NOT be described as direct partial-gravity testing.",
+        "Not all ACME datasets are publicly released yet; images appear after post-flight analysis.",
+        "NASA sources conflict on whether the ACME suite contains five or six experiments."
+      ],
+      "quantitativeData": [
+        {
+          "id": "efield-voltage-range",
+          "label": "Applied Electric Field Voltage Range",
+          "kind": "EXPERIMENTAL_CONDITION_RANGE",
+          "valueDisplay": "0–10 kV",
+          "min": 0,
+          "max": 10,
+          "unit": "kV",
+          "conditionContext": "Independent experimental control variable applied to coflow diffusion flames inside ISS CIR (not a measured outcome).",
+          "sourceCitation": "NASA ACME E-FIELD Flames Description (Dossier p. 2 & p. 3)",
+          "qualityNote": "Experimental condition boundary ONLY. Must not be misrepresented as partial-gravity acceleration or outcome telemetry."
+        }
+      ],
+      "tags": [
+        "ACME",
+        "E-FIELD",
+        "electric wind",
+        "ions",
+        "soot",
+        "10 kV"
+      ]
+    },
+    {
+      "id": "acme-planned",
+      "slug": "acme-planned",
+      "name": "ACME — CLD Flame, Flame Design & s-Flame (Suite Records)",
+      "shortName": "ACME — Other Suite Experiments",
+      "family": "ACME Laminar Diffusion Flame Suite",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "PRESENTATION / ABSTRACT",
+      "evidenceTypes": [
+        "PRESENTATION / ABSTRACT",
+        "NASA INVESTIGATION DESCRIPTION",
+        "PEER-REVIEWED PAPER"
+      ],
+      "platform": "ISS Combustion Integrated Rack (CIR)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": true,
+      "timeframe": "2017–2026 (Planned / Incomplete)",
+      "startYear": 2017,
+      "endYear": 2026,
+      "dataAvailability": "PLANNED_NO_PUBLIC_DATA",
+      "dataAvailabilityLabel": "No public PSI dataset yet (design papers & partner pubs only)",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": null,
+      "doi": null,
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search ACME CLD / s-Flame on NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=ACME%20CLD%20Flame%20Design%20s-Flame"
+        }
+      ],
+      "sourceLabel": "NASA ACME Website & Partner Publications (Long et al., Proc. Combust. Inst. 2018)",
+      "overview": "Additional experiments in the ACME modular CIR suite (CLD Flame, Flame Design, s-Flame, and CFI-G) studying soot inception/extinction, spherical flames, and oxygen-enriched combustion.",
+      "scientificPurpose": "Investigate coflow soot volume fraction, oxygen-enriched spherical flames, flame extinction, and inside-out porous-burner cool flames across modular CIR hardware.",
+      "background": "NASA source text in one paragraph mentions five experiments while the detailed list names six (BRE, CLD Flame, E-FIELD Flames, Flame Design, s-Flame, CFI-G); FLAREX preserves all six and flags the discrepancy.",
+      "fuels": [
+        "Hydrogen, methane, and ethylene (s-Flame)",
+        "Pure & highly diluted near-extinction laminar fuels (CLD Flame)",
+        "O2/N2 up to 85% oxygen porous-burner configuration (CFI-G)"
+      ],
+      "materialsAndGeometry": "Spherical, porous-burner, and coflow laminar diffusion burner geometries sharing modular ACME hardware in ISS CIR.",
+      "environmentalVariables": [
+        "Microgravity inside ISS CIR",
+        "Oxygen / inert diluent ratios (including CFI-G up to 85% O2/N2 burner flow)"
+      ],
+      "sensors": [
+        "HD color camera, CH* and OH* imaging",
+        "Color-ratio pyrometry, thin-filament pyrometry, thermocouples",
+        "Radiometers, photomultiplier tubes, gas chromatograph",
+        "Chamber pressure, SAMS-II acceleration, soot diagnostics"
+      ],
+      "hardware": "Modular ACME CIR insert with burners, igniter, gas-delivery system, and avionics.",
+      "measurementMethods": "CH*/OH* chemiluminescence, color-ratio & thin-filament pyrometry, soot diagnostics, gas chromatography, and SAMS-II microgravity acceleration logging.",
+      "reportedFindings": "In studied CLD Flame conditions, microgravity flames were taller, wider, cooler, and sootier than normal-gravity flames (one source reports 5–8× normal-gravity soot volume fraction; another context notes nearly 10× — kept study-specific). CFI-G performed high-oxygen microgravity tests (up to 85% O2/N2 from spherical burner). Remaining design datasets await full public PSI release.",
+      "scientificRelevance": "Demonstrates active frontiers in laminar soot, spherical extinction, and oxygen-enriched combustion while preserving archive release caveats.",
+      "limitations": [
+        "CRITICAL: Do not merge study-specific CLD Flame soot multipliers (5–8× vs. ~10×) into a single universal constant, and do not generalize CFI-G 85% O2/N2 burner flow as a spacecraft cabin atmosphere.",
+        "Planned / incomplete on-orbit data — do NOT treat planned datasets or design objectives as completed experimental results.",
+        "NASA sources disagree on whether the ACME suite has five or six experiments."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "ACME",
+        "CLD Flame",
+        "Flame Design",
+        "s-Flame",
+        "CFI-G",
+        "CIR",
+        "planned",
+        "soot"
+      ]
+    },
+    {
+      "id": "slice",
+      "slug": "slice",
+      "name": "SLICE (Structure & Liftoff In Combustion Experiment)",
+      "shortName": "SLICE",
+      "family": "Laminar Flame Structure & Stabilization",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "ISS Microgravity Science Glovebox (MSG)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "2011–2012 (Flyer 2010)",
+      "startYear": 2011,
+      "endYear": 2012,
+      "dataAvailability": "PUBLIC_IN_PSI",
+      "dataAvailabilityLabel": "Archived in NASA PSI (ID ACME-SLICE)",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": "ACME-SLICE",
+      "doi": null,
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search SLICE on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=Structure%20and%20Liftoff%20In%20Combustion%20Experiment%20SLICE"
+        }
+      ],
+      "sourceLabel": "NASA SLICE Flyer (2010) & NASA PSI (ACME-SLICE)",
+      "overview": "ISS Microgravity Science Glovebox investigation (2011–2012) of lifted laminar flames that bridged Shuttle-era SPICE and ACME's CLD Flame.",
+      "scientificPurpose": "Capture flame-base stabilization and liftoff velocities versus fuel flow and burner size in microgravity to refine laminar combustion models.",
+      "background": "Extended ground-based SPICE hardware into the ISS Glovebox as an early precursor to the ACME program.",
+      "fuels": [
+        "Methane",
+        "Ethylene"
+      ],
+      "materialsAndGeometry": "Varied burner sizes generating lifted laminar jet flames.",
+      "environmentalVariables": [
+        "Fuel flow velocity",
+        "Burner diameter / size",
+        "Microgravity inside ISS Glovebox"
+      ],
+      "sensors": [
+        "Flame imaging cameras",
+        "Flow/liftoff velocity instrumentation"
+      ],
+      "hardware": "ISS Microgravity Science Glovebox extending SPICE coflow hardware.",
+      "measurementMethods": "Measured liftoff velocity versus fuel flow and burner size alongside flame structure imagery.",
+      "reportedFindings": "Results (liftoff velocities vs. fuel and burner size) refined laminar flame stabilization models; flame images and velocity data were archived under PSI ID ACME-SLICE.",
+      "scientificRelevance": "Provides continuity between Shuttle soot-onset studies (SPICE) and modern ISS CIR laminar flame experiments (ACME).",
+      "limitations": [
+        "Historical ISS dataset (2011–2012).",
+        "Microgravity only; no partial-gravity data.",
+        "Raw image/velocity files reside in PSI (ACME-SLICE), not embedded in the dossier."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "SLICE",
+        "liftoff",
+        "methane",
+        "ethylene",
+        "ACME-SLICE",
+        "Glovebox"
+      ]
+    },
+    {
+      "id": "spice",
+      "slug": "spice",
+      "name": "SPICE (Smoke Point In Co-flow Experiment)",
+      "shortName": "SPICE",
+      "family": "Laminar Flame Structure & Stabilization",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "Space Shuttle",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "1997 (Shuttle Era)",
+      "startYear": 1997,
+      "endYear": 1997,
+      "dataAvailability": "PUBLIC_IN_PSI",
+      "dataAvailabilityLabel": "Archived in NASA PSI (ID 13000264)",
+      "hasQuantitativeSummary": true,
+      "hasRawNumericalDataset": false,
+      "psiId": "13000264",
+      "doi": null,
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search SPICE on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=Smoke%20Point%20In%20Co-flow%20Experiment%20SPICE"
+        }
+      ],
+      "sourceLabel": "NASA SPICE Report & NASA PSI (13000264)",
+      "overview": "Shuttle-era (1997) investigation mapping soot-onset smoke points in laminar coflow diffusion flames across multiple hydrocarbon fuels.",
+      "scientificPurpose": "Determine exact conditions where laminar jet flames begin to emit soot in microgravity as a baseline for soot and combustion models.",
+      "background": "Buoyancy strongly alters soot residence time on Earth; SPICE established a clean microgravity baseline across 250 tests.",
+      "fuels": [
+        "Propylene (C3H6)",
+        "Propane (C3H8)",
+        "Ethylene (C2H4)"
+      ],
+      "materialsAndGeometry": "Laminar coflow jet diffusion burner.",
+      "environmentalVariables": [
+        "Fuel species and flow rate",
+        "Microgravity (Shuttle orbit)"
+      ],
+      "sensors": [
+        "Flame shape imaging cameras",
+        "Smoke intensity / smoke-point optical diagnostics"
+      ],
+      "hardware": "Space Shuttle coflow combustion hardware (later extended for SLICE).",
+      "measurementMethods": "Optical measurement of smoke-point distances, flame shapes, and smoke intensities across varied fuel flows.",
+      "reportedFindings": "250 microgravity tests produced over 70 smoke points across C3H6, C3H8, and C2H4 flames; flame shapes and smoke intensities are archived in PSI.",
+      "scientificRelevance": "Core historical benchmark for microgravity soot inception and laminar flame radiation/smoke models.",
+      "limitations": [
+        "Historical Shuttle-era dataset (>25 years old, 1997).",
+        "Dossier notes older datasets may lack complete metadata or require format normalization before ML ingestion.",
+        "Microgravity only (no partial-gravity data)."
+      ],
+      "quantitativeData": [
+        {
+          "id": "spice-test-count",
+          "label": "Total Microgravity Tests Conducted",
+          "kind": "PUBLISHED_TEST_COUNT",
+          "valueDisplay": "250 tests",
+          "numericValue": 250,
+          "unit": "tests",
+          "conditionContext": "Shuttle-era SPICE (1997) coflow laminar jet flame matrix across C3H6, C3H8, and C2H4.",
+          "sourceCitation": "NASA SPICE Report (Dossier p. 2 & p. 3)",
+          "qualityNote": "Published total campaign count; individual test run telemetry is stored in PSI ID 13000264."
+        },
+        {
+          "id": "spice-smoke-points",
+          "label": "Measured Smoke Points Recorded",
+          "kind": "PUBLISHED_TEST_COUNT",
+          "valueDisplay": "> 70 smoke points",
+          "min": 70,
+          "unit": "smoke points",
+          "conditionContext": "Conditions where laminar jet flames begin emitting soot across C3H6, C3H8, and C2H4.",
+          "sourceCitation": "NASA SPICE Report (Dossier p. 2)",
+          "qualityNote": "Lower-bound summary count (>70); exact per-fuel distances are in PSI ID 13000264."
+        }
+      ],
+      "tags": [
+        "SPICE",
+        "smoke point",
+        "soot onset",
+        "C3H6",
+        "C3H8",
+        "C2H4",
+        "PSI 13000264"
+      ]
+    },
+    {
+      "id": "daft",
+      "slug": "daft",
+      "name": "DAFT (Dust & Aerosol Feasibility Test)",
+      "shortName": "DAFT",
+      "family": "Smoke, Aerosols & Fire Detection",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "ISS Microgravity Science Glovebox (MSG) & Cabin Modules",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "2004–2005",
+      "startYear": 2004,
+      "endYear": 2005,
+      "dataAvailability": "ARCHIVED_OR_CONDITIONAL",
+      "dataAvailabilityLabel": "Instrument readings presumably in NASA archives (no PSI ID listed)",
+      "hasQuantitativeSummary": true,
+      "hasRawNumericalDataset": false,
+      "psiId": null,
+      "doi": null,
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "Search DAFT on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=Dust%20and%20Aerosol%20Feasibility%20Test%20DAFT%20ISS"
+        }
+      ],
+      "sourceLabel": "NASA DAFT Overview",
+      "overview": "ISS Glovebox and cabin aerosol feasibility experiment (2004–2005) verifying a portable ultrafine particle counter (P-Trak) in microgravity.",
+      "scientificPurpose": "Verify ultrafine particle counting capability in microgravity ISS air using tracer aerosols, clearing the path for the full SAME smoke-sizing investigation.",
+      "background": "Before calibrating smoke detectors in SAME, NASA needed to confirm portable aerosol instrumentation functioned accurately without gravity-driven settling.",
+      "fuels": [
+        "Tracer aerosols (non-combustion feasibility verification)"
+      ],
+      "materialsAndGeometry": null,
+      "environmentalVariables": [
+        "ISS cabin module background particulate environment",
+        "Microgravity"
+      ],
+      "sensors": [
+        "P-Trak portable ultrafine particle counter (0.1–1 μm)"
+      ],
+      "hardware": "Portable P-Trak counter tested in ISS Glovebox and across ISS modules.",
+      "measurementMethods": "P-Trak particle counts versus time in ISS cabin modules with and without released tracer aerosols.",
+      "reportedFindings": "Verified P-Trak could count 0.1–1 μm particles in ISS air and confirmed low particulate levels in ISS with particles larger on average than on Earth, clearing the way for SAME.",
+      "scientificRelevance": "Demonstrates hardware validation methodology for ultrafine spacecraft aerosol monitoring and dust-vs-smoke differentiation.",
+      "limitations": [
+        "Feasibility / instrument verification test, not a direct combustion or flame-spread study.",
+        "No explicit PSI dataset ID listed in the dossier ('presumably in NASA archives').",
+        "Historical campaign (2004–2005)."
+      ],
+      "quantitativeData": [
+        {
+          "id": "daft-particle-range",
+          "label": "P-Trak Ultrafine Particle Detection Size Range",
+          "kind": "EXPERIMENTAL_CONDITION_RANGE",
+          "valueDisplay": "0.1–1 μm",
+          "min": 0.1,
+          "max": 1,
+          "unit": "μm",
+          "conditionContext": "Instrument operating size detection specification verified with tracer aerosols in ISS air.",
+          "sourceCitation": "NASA DAFT Overview (Dossier p. 2 & p. 3)",
+          "qualityNote": "Instrument measurement range specification, not a combustion yield measurement."
+        }
+      ],
+      "tags": [
+        "DAFT",
+        "P-Trak",
+        "ultrafine particles",
+        "aerosol",
+        "ISS cabin",
+        "feasibility"
+      ]
+    },
+    {
+      "id": "confined-combustion",
+      "slug": "confined-combustion",
+      "name": "Confined Combustion (Flames in Enclosures)",
+      "shortName": "Confined Combustion",
+      "family": "Enclosure & Radiative Fire Spread",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION",
+        "PEER-REVIEWED PAPER"
+      ],
+      "platform": "International Space Station (ISS)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "2019–2020",
+      "startYear": 2019,
+      "endYear": 2020,
+      "dataAvailability": "ARCHIVED_OR_CONDITIONAL",
+      "dataAvailabilityLabel": "NASA Investigation ID 7886 · PSI ID 13000365 (conditional video release)",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": "13000365 (NASA Inv. 7886)",
+      "doi": null,
+      "principalInvestigator": "Ya-Ting Liao",
+      "historicalNotes": [
+        "NASA overview notes the first burn was performed aboard the ISS by astronaut Christina Koch on Christmas Eve 2019."
+      ],
+      "sourceUrl": "https://www.nasa.gov/mission_pages/station/research/experiments/explorer/Investigation.html?#id=7886",
+      "secondaryUrls": [
+        {
+          "label": "NASA PSI Repository (ID 13000365)",
+          "url": "https://psi.nasa.gov/physci/repo"
+        },
+        {
+          "label": "Search Confined Combustion on NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=Confined%20Combustion%20ISS%20CIR%20Liao"
+        }
+      ],
+      "sourceLabel": "NASA Investigation 7886 Overview & Case Western (Ya-Ting Liao)",
+      "overview": "ISS investigation (ID 7886, 2019–2020) studying flame spread through differently shaped confined spaces and the influence of wall radiation and geometry in microgravity.",
+      "scientificPurpose": "Isolate radiative and tunnel/wall-interaction fire-spread effects in microgravity where buoyant flow is eliminated, supporting building and vehicle fire-safety codes.",
+      "background": "Real spacecraft compartments and terrestrial buildings involve walls and baffles that re-radiate heat and restrict flow; microgravity isolates these radiative enclosure effects.",
+      "fuels": [
+        "Sibal fabric samples"
+      ],
+      "materialsAndGeometry": "Sibal fabric samples tested inside differently shaped confined enclosures with and without reflective surrounding walls.",
+      "environmentalVariables": [
+        "Wall reflectivity (with/without reflective walls)",
+        "Baffle & confined enclosure geometry",
+        "Microgravity (no buoyancy)"
+      ],
+      "sensors": [
+        "Flame video cameras",
+        "Temperature sensors"
+      ],
+      "hardware": "ISS confined baffle enclosure apparatus.",
+      "measurementMethods": "Measurement of flame spread rates, temperatures, and video of Sibal fabric flames with and without reflective baffles.",
+      "reportedFindings": "Eliminating buoyant flow in microgravity successfully isolated radiative and tunnel wall effects, yielding flame spread and temperature context relevant to ISS modules, vehicles, and building fire codes.",
+      "scientificRelevance": "Directly informs compartment-scale fire spread models for crewed habitats and terrestrial buildings/vehicles.",
+      "limitations": [
+        "Supplied source is a NASA overview, not a full paper or raw numerical dataset; no numerical spread rates are available in the database.",
+        "SoFIE-OFFS is a separate investigation and must not be merged with Confined Combustion.",
+        "PSI flame videos (ID 13000365) are annotated as conditional ('if released'); microgravity only."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "Confined Combustion",
+        "Investigation 7886",
+        "enclosures",
+        "baffles",
+        "radiative",
+        "Sibal fabric",
+        "PSI 13000365"
+      ]
+    },
+    {
+      "id": "sofie-mist",
+      "slug": "sofie-mist",
+      "name": "SoFIE-MIST (Material Ignition and Suppression Test)",
+      "shortName": "SoFIE-MIST",
+      "family": "Solid Fuel Flammability & Extinguishment",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION",
+        "PEER-REVIEWED PAPER"
+      ],
+      "platform": "ISS SoFIE & Combustion Integrated Rack (CIR)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": true,
+      "timeframe": "2021-10 to 2027-09 (Ongoing / Planned)",
+      "startYear": 2021,
+      "endYear": 2027,
+      "dataAvailability": "PLANNED_NO_PUBLIC_DATA",
+      "dataAvailabilityLabel": "No public PSI dataset yet (2021–2027; 3 journal citations noted)",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": "TBD (Ongoing SoFIE)",
+      "doi": "10.1016/j.firesaf.2026.104719",
+      "principalInvestigator": "Carlos Fernandez-Pello (UC Berkeley) · Co-Is: Michael Gollner, Nickolay Smirnov · Developer: NASA Glenn Research Center",
+      "publications": [
+        {
+          "title": "Opposed flame spread limit over PMMA rods in normal and micro gravity",
+          "journal": "Fire Safety Journal",
+          "date": "2026-07",
+          "doi": "10.1016/j.firesaf.2026.104719"
+        },
+        {
+          "title": "Flame extinction of thermally thick PMMA in Earth gravity versus microgravity: A comparison of Earth and on-orbit space experiments",
+          "journal": "Fire Safety Journal",
+          "date": "2026-05",
+          "doi": "10.1016/j.firesaf.2025.104625"
+        },
+        {
+          "title": "Downward flame spread rate over PMMA rods under external radiant heating",
+          "journal": "Fire Technology",
+          "date": "2022-04-30",
+          "doi": "10.1007/s10694-022-01245-y"
+        }
+      ],
+      "sourceUrl": "https://psi.nasa.gov/physci/repo",
+      "secondaryUrls": [
+        {
+          "label": "NASA GRC SoFIE Facility Page",
+          "url": "https://gipoc.grc.nasa.gov/wp/fcf-cir/sofie/"
+        },
+        {
+          "label": "Search SoFIE-MIST on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=SoFIE-MIST%20Solid%20Fuel%20Ignition%20Extinction"
+        }
+      ],
+      "sourceLabel": "NASA SoFIE-MIST Page & Associated Journal Citations",
+      "overview": "Studies thermally assisted burning and ignition/extinction boundaries for solid PMMA cylinder samples in microgravity under varying airflow, oxygen, pressure, and external radiant heat flux (2021-10 to 2027-09).",
+      "scientificPurpose": "Map ignition and extinction boundaries for thermally thick solid PMMA under varied exploration-atmosphere pressures, oxygen concentrations, airflow speeds, and external radiation.",
+      "background": "SoFIE-MIST is a distinct ISS Combustion Integrated Rack insert investigation led by UC Berkeley and NASA Glenn Research Center.",
+      "fuels": [
+        "PMMA (polymethyl methacrylate) cylindrical solid-fuel rods"
+      ],
+      "materialsAndGeometry": "PMMA cylinder solid-fuel samples exposed to external radiant heat flux.",
+      "environmentalVariables": [
+        "Airflow speed",
+        "Oxygen concentration",
+        "Ambient pressure",
+        "External radiant heat flux"
+      ],
+      "sensors": [
+        "Thermocouples & imaging camera",
+        "Oxygen and carbon dioxide concentration sensors",
+        "Pressure, airflow & extinction-condition diagnostics"
+      ],
+      "hardware": "ISS Combustion Integrated Rack (CIR) SoFIE insert.",
+      "measurementMethods": "Tracking ignition delay, thermally assisted flame spread, and extinction limits across environmental sweeps.",
+      "reportedFindings": "Three peer-reviewed PMMA citations are identified in user notes, but detailed numerical results are not included locally; some on-orbit test counts are planned and must not be labeled completed.",
+      "scientificRelevance": "Directly calibrates solid-fuel flammability screening for variable-pressure/elevated-oxygen Artemis habitats once full flight datasets are released.",
+      "limitations": [
+        "Supplied excerpt lists publication titles/DOIs without detailed numerical results; do not infer findings from titles alone.",
+        "CRITICAL: Planned/ongoing test counts (2021-10 to 2027-09) must NOT be labeled as completed.",
+        "Microgravity only (ISS CIR); no partial-gravity data."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "SoFIE",
+        "SoFIE-MIST",
+        "PMMA",
+        "external radiation",
+        "extinction",
+        "planned"
+      ]
+    },
+    {
+      "id": "sofie-offs",
+      "slug": "sofie-offs",
+      "name": "SoFIE-OFFS (Oscillatory Flow on Flame Spread)",
+      "shortName": "SoFIE-OFFS",
+      "family": "Solid Fuel Flammability & Extinguishment",
+      "recordCategory": "NASA_INVESTIGATION",
+      "evidenceType": "NASA INVESTIGATION DESCRIPTION",
+      "evidenceTypes": [
+        "NASA INVESTIGATION DESCRIPTION"
+      ],
+      "platform": "ISS SoFIE & Combustion Integrated Rack (CIR)",
+      "gravityContext": "Microgravity",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": true,
+      "timeframe": "2024-04 to 2026-07 (Planned / In-Progress)",
+      "startYear": 2024,
+      "endYear": 2026,
+      "dataAvailability": "PLANNED_NO_PUBLIC_DATA",
+      "dataAvailabilityLabel": "No public PSI dataset yet (~30 experiments in NASA entry)",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": "TBD (Ongoing SoFIE-OFFS)",
+      "doi": null,
+      "principalInvestigator": "James Urban (WPI) · Developers: Worcester Polytechnic Institute, ZIN Technologies, NASA Glenn Research Center",
+      "sourceUrl": "https://www.nasa.gov/",
+      "secondaryUrls": [
+        {
+          "label": "NASA GRC SoFIE Facility Page",
+          "url": "https://gipoc.grc.nasa.gov/wp/fcf-cir/sofie/"
+        },
+        {
+          "label": "Search SoFIE-OFFS on NASA NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=SoFIE-OFFS%20Oscillatory%20Flow%20Flame%20Spread"
+        }
+      ],
+      "sourceLabel": "NASA SoFIE-OFFS Investigation Entry (James Urban, WPI)",
+      "overview": "Studies transient flame motion and flame spread through fine fuels under controlled non-steady (oscillatory) concurrent airflow in microgravity (2024-04 to 2026-07).",
+      "scientificPurpose": "Isolate how transient oscillatory forced flow alters convective heating and ignition of fine fuels without buoyancy, informing both wildfire behavior research and spacecraft fire safety.",
+      "background": "Distinct from Confined Combustion and SoFIE-MIST; developed by WPI, ZIN Technologies, and NASA Glenn Research Center for the SoFIE CIR insert.",
+      "fuels": [
+        "Fine solid fuel samples under non-steady concurrent airflow"
+      ],
+      "materialsAndGeometry": "Fine solid fuels configured in SoFIE oscillatory forced-flow test section.",
+      "environmentalVariables": [
+        "Non-steady / oscillatory concurrent forced airflow",
+        "Microgravity inside ISS CIR (no buoyancy)"
+      ],
+      "sensors": [
+        "Flame spread & transient motion imaging",
+        "Forced-flow velocity instrumentation"
+      ],
+      "hardware": "ISS Combustion Integrated Rack (CIR) SoFIE insert (WPI / ZIN Technologies / NASA GRC).",
+      "measurementMethods": "Controlled non-steady forced airflow applied to observe transient flame motion, convective heating, and fine-fuel ignition.",
+      "reportedFindings": "NASA entry describes approximately 30 experiments examining transient convective heating under oscillatory flow; no numerical results or public PSI datasets are included yet.",
+      "scientificRelevance": "Bridges spacecraft non-steady cabin ventilation hazards and terrestrial wildfire convective-ignition physics.",
+      "limitations": [
+        "CRITICAL: Listed period (2024-04 to 2026-07) and ~30 experiment count are source metadata, NOT proof that all tests are completed or publicly available.",
+        "Separate investigation from Confined Combustion and SoFIE-MIST.",
+        "No numerical results or raw data embedded in database."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "SoFIE",
+        "SoFIE-OFFS",
+        "oscillatory flow",
+        "fine fuels",
+        "wildfire",
+        "planned"
+      ]
+    },
+    {
+      "id": "battery-fire-ul",
+      "slug": "battery-fire-ul",
+      "name": "Fire and Gas Characterization Studies for Lithium-ion Cells and Batteries (UL)",
+      "shortName": "Battery Fire Research (UL)",
+      "family": "Spacecraft Energy Storage & Battery Fire Hazards",
+      "recordCategory": "COMPLEMENTARY_TERRESTRIAL",
+      "evidenceType": "COMPLEMENTARY TERRESTRIAL RESEARCH",
+      "evidenceTypes": [
+        "COMPLEMENTARY TERRESTRIAL RESEARCH",
+        "PRESENTATION / ABSTRACT"
+      ],
+      "platform": "Ground-Based Laboratory Tests & Modeling Only (1g Terrestrial)",
+      "gravityContext": "Terrestrial Ground Lab",
+      "isMicrogravity": false,
+      "isPlannedOrOngoing": false,
+      "timeframe": "2020 (NASA Aerospace Battery Workshop)",
+      "startYear": 2020,
+      "endYear": 2020,
+      "dataAvailability": "TERRESTRIAL_LAB_ONLY",
+      "dataAvailabilityLabel": "Ground workshop slides only (NO microgravity flight data)",
+      "hasQuantitativeSummary": true,
+      "hasRawNumericalDataset": false,
+      "psiId": null,
+      "doi": null,
+      "authors": [
+        "Daniel Juarez Robles",
+        "Judy Jeevarajan"
+      ],
+      "sourceUrl": "https://www.ul.com/",
+      "secondaryUrls": [
+        {
+          "label": "Search 2020 NASA Aerospace Battery Workshop on NTRS",
+          "url": "https://ntrs.nasa.gov/search?q=NASA%20UL%20lithium%20ion%20battery%20thermal%20runaway"
+        },
+        {
+          "label": "NASA PSI Official Portal (Confirming No Flight Battery Dataset)",
+          "url": "https://psi.nasa.gov/physci/repo"
+        }
+      ],
+      "sourceLabel": "Underwriters Laboratories Presentation at 2020 NASA Aerospace Battery Workshop",
+      "overview": "Terrestrial (1g) Underwriters Laboratories presentation characterizing fire hazards, thermal runaway, vent gases, and smoke for selected LFP cylindrical and NMC prismatic Li-ion configurations at 100% SOC using UL 9540A heating.",
+      "scientificPurpose": "Characterize thermal runaway propagation, peak temperatures, and vent gas volumes/compositions (CO, H2, HF) across selected LFP and NMC cell, module, and battery configurations.",
+      "background": "High-energy Li-ion cells are critical for spacecraft and surface systems, but NASA has no in-flight microgravity battery fire dataset; this UL workshop presentation provides terrestrial hazard context only.",
+      "fuels": [
+        "LFP (LiFePO4) cylindrical cells/modules/batteries (100% SOC)",
+        "NMC prismatic cells/modules/batteries (100% SOC)"
+      ],
+      "materialsAndGeometry": "Selected LFP cylindrical and NMC prismatic cells, modules, and battery packs heated under UL 9540A profile.",
+      "environmentalVariables": [
+        "1g Earth laboratory atmosphere (NOT microgravity or ISS data)",
+        "100% state of charge (SOC) · UL 9540A heating profile",
+        "Cell capacity, geometry & heat-transfer pathways"
+      ],
+      "sensors": [
+        "Thermal runaway temperature probes (1459°C NMC / 661°C LFP test examples)",
+        "Vent gas composition & volume analyzers (CO, H2, HF)",
+        "Smoke & propagation imaging"
+      ],
+      "hardware": "Ground-based UL 9540A thermal runaway test apparatus.",
+      "measurementMethods": "UL 9540A thermal heating of cells/modules/batteries tracking maximum temperatures, propagation behavior, and single-cell gas volumes/compositions.",
+      "reportedFindings": "In the reported 1g tests, NMC modules/battery propagated with external fire (example max 1459°C), whereas LFP modules/battery showed thermal-runaway propagation without external flaming (example max 661°C). Single-cell gas sample differences also reflect differing cell capacities/configurations, so direct chemistry-only generalizations are invalid.",
+      "scientificRelevance": "Highlights why thermal runaway and visible fire are not synonymous, why single-cell tests cannot alone predict pack behavior, and why in-flight microgravity battery fire data remain an urgent gap.",
+      "limitations": [
+        "CRITICAL: Ground-based terrestrial 1g tests performed by UL ONLY — NOT microgravity or ISS data, and NOT performed by NASA.",
+        "Example max temperatures (1459°C NMC, 661°C LFP) are test-specific for selected cell capacities/configurations, NOT universal chemistry properties.",
+        "Do NOT mix into microgravity dataset charts or microgravity ML training sets."
+      ],
+      "quantitativeData": [
+        {
+          "id": "ul-nmc-max-temp",
+          "label": "Test-Specific Example Max Temperature (NMC Battery, 1g)",
+          "kind": "PUBLISHED_COMPARISON",
+          "valueDisplay": "1459 °C (1g UL 9540A test)",
+          "numericValue": 1459,
+          "unit": "°C",
+          "conditionContext": "Test-specific terrestrial 1g UL 9540A example for selected NMC prismatic battery configuration at 100% SOC (propagated with fire).",
+          "sourceCitation": "Robles & Jeevarajan (UL), 2020 NASA Aerospace Battery Workshop",
+          "qualityNote": "TERRESTRIAL 1g ONLY, test-specific example (different cell capacities/configurations from LFP test); NOT a universal chemistry limit or microgravity data."
+        },
+        {
+          "id": "ul-lfp-max-temp",
+          "label": "Test-Specific Example Max Temperature (LFP Battery, 1g)",
+          "kind": "PUBLISHED_COMPARISON",
+          "valueDisplay": "661 °C (1g UL 9540A test)",
+          "numericValue": 661,
+          "unit": "°C",
+          "conditionContext": "Test-specific terrestrial 1g UL 9540A example for selected LFP cylindrical battery configuration at 100% SOC (thermal runaway propagation without external flaming).",
+          "sourceCitation": "Robles & Jeevarajan (UL), 2020 NASA Aerospace Battery Workshop",
+          "qualityNote": "TERRESTRIAL 1g ONLY, test-specific example; thermal runaway occurred without visible external fire."
+        }
+      ],
+      "tags": [
+        "Li-ion",
+        "battery",
+        "UL 9540A",
+        "thermal runaway",
+        "LFP",
+        "NMC",
+        "terrestrial only",
+        "HF",
+        "CO",
+        "H2"
+      ]
+    },
+    {
+      "id": "dossier-literature-review",
+      "slug": "dossier-literature-review",
+      "name": "Solid Fuel Combustion in Partial & Micro-Gravity (Scientific Review & PSI Audit)",
+      "shortName": "Solid Fuel & PSI Review",
+      "family": "Cross-Archive Synthesis & Data Quality Audit",
+      "recordCategory": "REVIEW_PAPER",
+      "evidenceType": "REVIEW PAPER",
+      "evidenceTypes": [
+        "REVIEW PAPER",
+        "PRESENTATION / ABSTRACT"
+      ],
+      "platform": "Cross-Archive Literature Synthesis (PSI, NTRS, ISS & Shuttle)",
+      "gravityContext": "Multi-Archive Literature Review",
+      "isMicrogravity": true,
+      "isPlannedOrOngoing": false,
+      "timeframe": "1997–2027 Coverage (Compiled 2026)",
+      "startYear": 1997,
+      "endYear": 2027,
+      "dataAvailability": "PARTIAL_OR_NTRS",
+      "dataAvailabilityLabel": "Review paper & structured database covering 15+ NASA/partner records",
+      "hasQuantitativeSummary": false,
+      "hasRawNumericalDataset": false,
+      "psiId": null,
+      "doi": null,
+      "sourceUrl": "/assets/aistudio/flarex_research_database_def47b9d.json",
+      "secondaryUrls": [
+        {
+          "label": "Project Research Dossier PDF",
+          "url": "/assets/aistudio/Project_Research_Dossier__Flame-in-Freefall_Challenge_2026__7dd02da0.pdf"
+        },
+        {
+          "label": "NASA PSI Repository",
+          "url": "https://psi.nasa.gov/physci/repo"
+        },
+        {
+          "label": "NASA NTRS Portal",
+          "url": "https://ntrs.nasa.gov/"
+        }
+      ],
+      "sourceLabel": "Solid Fuel Combustion in Partial and Micro-Gravity Review & FLAREX Database",
+      "overview": "Synthesizes solid-fuel combustion physics (cellulosics, plastics, composites, battery electrodes) and fire-safety knowledge gaps in microgravity and partial gravity alongside NASA PSI dataset audits.",
+      "scientificPurpose": "Review coupled solid/gas physics (reduced buoyancy, radiation, smoldering, pyrolysis) and establish research gaps across DNS/LES, solid-phase kinetics, and partial-gravity validation.",
+      "background": "Combines the scientific review 'Solid Fuel Combustion in Partial and Micro-Gravity' with FLAREX's pre-event PSI quality audit.",
+      "fuels": [
+        "Cellulosic materials, plastics, hydrocarbons, composites, and battery electrode materials"
+      ],
+      "materialsAndGeometry": "Multi-scale solid fuels, charring/swelling polymers, pyrolysate transport, and coupled solid/gas configurations.",
+      "environmentalVariables": [
+        "Reduced gravity (weakened buoyant convection)",
+        "Imposed airflow, radiative feedback, pressure & material geometry"
+      ],
+      "sensors": [
+        "Synthesis of optical flame video, radiometry, P-Trak, O2/CO2, heat flux, and chemiluminescence diagnostics"
+      ],
+      "hardware": "Cross-platform synthesis (Shuttle, ISS MSG, ISS CIR, Cygnus, Ground Lab) and DNS/LES multiphysics models.",
+      "measurementMethods": "Literature synthesis & 6-point PSI dataset quality audit covering DNS, LES, solid decomposition, charring/smoldering, and in-depth radiation modeling.",
+      "reportedFindings": "Reduced gravity weakens buoyancy so diffusion, radiation, geometry, and imposed flow dominate. BASS/BASS-II and Saffire confirm material/geometry/flow sensitivity; partial-gravity concurrent-flow spread evidence remains limited and uncertain; 9 key research gaps (solid kinetics, pyrolysate transport, deformation/swelling, scale, partial-gravity validation, battery runaway, advanced diagnostics, coupled models) are identified.",
+      "scientificRelevance": "Establishes the scientific gap taxonomy, modeling priorities, and strict provenance rules implemented across FLAREX.",
+      "limitations": [
+        "Literature review ONLY — not a single experiment dataset; avoid turning its discussion into operational fire-management advice.",
+        "Summarizes secondary NASA pages, TMs, press releases, and workshop decks without embedding raw AVI/CSV files."
+      ],
+      "quantitativeData": [],
+      "tags": [
+        "review",
+        "solid fuel review",
+        "pyrolysis",
+        "DNS",
+        "LES",
+        "partial gravity",
+        "PSI audit"
+      ]
+    }
+  ]
+}

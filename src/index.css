@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+    --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    /* Light aerospace laboratory palette */
+    --bg-primary: #F5F8FC;
+    --bg-secondary: #EDF2F8;
+    --bg-sidebar: #EBF1F8;
+    --bg-card: #FFFFFF;
+    --bg-elevated: #F8FAFD;
+    --bg-input: #FFFFFF;
+
+    --accent-blue: #0284C7;
+    --accent-blue-hover: #0369A1;
+    --accent-blue-contrast: #FFFFFF;
+    --accent-cyan: #0891B2;
+    --accent-violet: #6D28D9;
+
+    --text-primary: #0F172A;
+    --text-secondary: #475569;
+    --text-muted: #64748B;
+
+    --status-success: #059669;
+    --status-warning: #D97706;
+    --status-danger: #DC2626;
+
+    --border-subtle: rgba(15, 23, 42, 0.12);
+    --border-strong: rgba(15, 23, 42, 0.22);
+    --grid-line: rgba(2, 132, 199, 0.06);
+    --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05);
+    --shadow-elevated: 0 8px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .dark {
+    /* Primary FLAREX dark observatory palette */
+    --bg-primary: #080D18;
+    --bg-secondary: #0D1627;
+    --bg-sidebar: #0B1424;
+    --bg-card: #111F33;
+    --bg-elevated: #172940;
+    --bg-input: #080D18;
+
+    --accent-blue: #36AFFF;
+    --accent-blue-hover: #5CBEFF;
+    --accent-blue-contrast: #06101E;
+    --accent-cyan: #35D6E8;
+    --accent-violet: #8C7BFF;
+
+    --text-primary: #F4F7FC;
+    --text-secondary: #A8B5C8;
+    --text-muted: #718198;
+
+    --status-success: #36C98F;
+    --status-warning: #F2B85B;
+    --status-danger: #F16B79;
+
+    --border-subtle: rgba(148, 170, 200, 0.14);
+    --border-strong: rgba(148, 170, 200, 0.28);
+    --grid-line: rgba(54, 175, 255, 0.045);
+    --shadow-card: 0 1px 3px rgba(2, 6, 16, 0.35);
+    --shadow-elevated: 0 12px 30px rgba(2, 6, 16, 0.55);
+  }
+
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono-tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Accessible focus ring */
+*:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+/* Subtle calibrated coordinate grid for precision headers */
+.lab-grid-bg {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Smooth subtle view transition */
+@keyframes flarexViewEnter {
+  from {
+    opacity: 0.92;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.flarex-view-enter {
+  animation: flarexViewEnter 120ms ease-out;
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
