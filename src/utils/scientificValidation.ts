@@ -1,5 +1,6 @@
 import {
   DataValidationCheckResult,
+  ExtendedValidationDiagnostics,
   RawValidationDiagnostics,
   runTwelveDataValidationChecks,
 } from './dataValidation.ts';
@@ -29,6 +30,7 @@ export interface DatasetQualityReport {
   readinessAssessment: DatasetReadinessLevel;
   readinessRationale: string;
   statisticalGuardrails: string[];
+  extendedDiagnostics?: ExtendedValidationDiagnostics;
 }
 
 export function buildDatasetQualityReport(
@@ -111,5 +113,6 @@ export function buildDatasetQualityReport(
     readinessAssessment,
     readinessRationale,
     statisticalGuardrails: Array.from(new Set(statisticalGuardrails)),
+    extendedDiagnostics: diag.extendedDiagnostics,
   };
 }

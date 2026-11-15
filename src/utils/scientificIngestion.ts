@@ -1,3 +1,5 @@
+import { computeSha256Sync } from './reproducibilityEngine.ts';
+
 export type TabularFormat = 'CSV' | 'TSV' | 'TXT' | 'JSON';
 
 export type ProvenanceLayer =
@@ -31,15 +33,20 @@ export interface IngestedDatasetProvenance {
   transformationHistory: string[];
   format: TabularFormat;
   byteSize: number;
+  sha256Checksum?: string;
+  detectedEncoding?: 'UTF-8 (with BOM)' | 'UTF-8 / ASCII';
+  detectedDelimiter?: ',' | '\t' | ';' | 'JSON';
 }
 
 export interface IngestedDatasetPackage {
   provenance: IngestedDatasetProvenance;
   columns: IngestedColumnSchema[];
-  /** Preserved raw rows exactly as parsed from the source file (never mutated). */
+  /** Layer 1: Preserved raw rows exactly as parsed from the source file (never mutated). */
   originalRows: Array<Record<string, string>>;
-  /** Normalized rows stored separately from originalRows; missing/invalid values are null (never zero). */
+  /** Layer 2: Normalized rows stored separately from originalRows; missing/invalid values are null (never zero). */
   normalizedRows: Array<Record<string, number | string | null>>;
+  /** Layer 3: Cleaned analysis-ready rows (omits wholly-empty rows while preserving nulls and original/normalized layers). */
+  analysisRows: Array<Record<string, number | string | null>>;
   summary: {
     rowCount: number;
     columnCount: number;
@@ -170,7 +177,8 @@ export function ingestScientificTabularData(input: {
   retrievalDate?: string;
   description?: string;
 }): IngestedDatasetPackage {
-  const { filename, content } = input;
+  const { filename } = input;
+  const rawInputContent = input.content ?? '';
   const lower = filename.toLowerCase();
   const format: TabularFormat = lower.endsWith('.json')
     ? 'JSON'
@@ -184,6 +192,16 @@ export function ingestScientificTabularData(input: {
   const datasetId = `ds-${filename.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40)}-${Date.now()}`;
   const warnings: string[] = [];
   const errors: string[] = [];
+
+  const hasBom = rawInputContent.startsWith('\uFEFF');
+  const content = hasBom ? rawInputContent.slice(1) : rawInputContent;
+  const detectedEncoding = hasBom ? ('UTF-8 (with BOM)' as const) : ('UTF-8 / ASCII' as const);
+  let detectedDelimiter: ',' | '\t' | ';' | 'JSON' = format === 'JSON' ? 'JSON' : ',';
+  const sha256Checksum = computeSha256Sync(rawInputContent);
+
+  if (hasBom) {
+    warnings.push('UTF-8 Byte Order Mark (BOM) stripped cleanly during ingestion.');
+  }
 
   let headers: string[] = [];
   let rawRowsMatrix: string[][] = [];
@@ -243,6 +261,7 @@ export function ingestScientificTabularData(input: {
       errors.push('Tabular file requires a header row and at least 1 data row.');
     } else {
       const delimiter = detectDelimiter(lines[0], format);
+      detectedDelimiter = delimiter;
       headers = splitDelimitedLine(lines[0], delimiter);
       if (headers.some((h) => !h)) {
         warnings.push('One or more blank column headers were auto-named.');
@@ -275,11 +294,15 @@ export function ingestScientificTabularData(input: {
         importStatus: 'FAILED',
         transformationHistory: ['Validation failed before normalization.'],
         format,
-        byteSize: content.length,
+        byteSize: input.content.length,
+        sha256Checksum,
+        detectedEncoding,
+        detectedDelimiter,
       },
       columns: [],
       originalRows: [],
       normalizedRows: [],
+      analysisRows: [],
       summary: {
         rowCount: 0,
         columnCount: 0,
@@ -414,6 +437,20 @@ export function ingestScientificTabularData(input: {
       return normObj;
     });
 
+  const analysisRows: Array<Record<string, number | string | null>> = [];
+  for (const normRow of normalizedRows) {
+    const hasAtLeastOneValue = Object.values(normRow).some((v) => v !== null && v !== '');
+    if (hasAtLeastOneValue) {
+      analysisRows.push({ ...normRow });
+    }
+  }
+  const omittedAllNullRows = normalizedRows.length - analysisRows.length;
+  if (omittedAllNullRows > 0) {
+    warnings.push(
+      `Excluded ${omittedAllNullRows} completely empty/all-null row(s) from Layer 3 (analysisRows) while keeping originalRows and normalizedRows intact.`
+    );
+  }
+
   const measurementUnits: Record<string, string | null> = {};
   columnStats.forEach((c) => {
     measurementUnits[c.originalName] = c.detectedUnit;
@@ -441,16 +478,21 @@ export function ingestScientificTabularData(input: {
       importStatus:
         warnings.length > 0 ? 'IMPORTED_WITH_WARNINGS' : 'IMPORTED',
       transformationHistory: [
-        `Parsed ${format} source (${content.length} bytes) preserving originalRows verbatim.`,
+        `Layer 1 (originalRows): Parsed ${format} source (${input.content.length} bytes, SHA-256 ${sha256Checksum.slice(0, 12)}…) verbatim.`,
         'Detected units from column headers without altering numeric magnitudes.',
-        'Mapped NA/null/non-numeric tokens in numeric columns strictly to null in normalizedRows (zero never substituted).',
+        'Layer 2 (normalizedRows): Mapped NA/null/non-numeric tokens in numeric columns strictly to null (zero never substituted).',
+        `Layer 3 (analysisRows): Prepared ${analysisRows.length} analysis-ready row(s) while preserving full provenance separation.`,
       ],
       format,
-      byteSize: content.length,
+      byteSize: input.content.length,
+      sha256Checksum,
+      detectedEncoding,
+      detectedDelimiter,
     },
     columns: columnStats,
     originalRows,
     normalizedRows,
+    analysisRows,
     summary: {
       rowCount: rawRowsMatrix.length,
       columnCount: columnStats.length,

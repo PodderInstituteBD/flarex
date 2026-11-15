@@ -30,12 +30,13 @@ import {
   EVIDENCE_CATEGORY_LABELS,
   EvidenceCategory6,
 } from '../utils/evidenceIntelligence';
+import type { ReproducibilityRecord } from '../utils/reproducibilityEngine';
 import type { ReproducibleAnalysisRun } from '../utils/scientificAnalysis';
 import {
   AuditCheckStatus,
   AuditSystemTelemetryInput,
-  renderScientificAuditMarkdown,
-  runPlatformScientificAudit,
+  renderScientificAuditV2Markdown,
+  runPlatformScientificAuditV2,
 } from '../utils/scientificAudit';
 import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
 import {
@@ -51,6 +52,8 @@ interface EvidenceEngineProps {
   onOpenInvestigation: (id: string) => void;
   ingestedDatasets?: IngestedDatasetPackage[];
   analysisHistory?: ReproducibleAnalysisRun[];
+  reproducibilityRecords?: ReproducibilityRecord[];
+  workspaceItemCount?: number;
   checkedSourcesCount?: number;
   retrievedDocumentsCount?: number;
   generatedReportsCount?: number;
@@ -157,8 +160,9 @@ export function EvidenceEngine({
   onOpenInvestigation,
   ingestedDatasets = [],
   analysisHistory = [],
+  reproducibilityRecords = [],
+  workspaceItemCount = 0,
   checkedSourcesCount = 0,
-  retrievedDocumentsCount = 0,
   generatedReportsCount = 0,
   aiInterpretations = [],
   savedEvidenceIds = [],
@@ -263,17 +267,20 @@ export function EvidenceEngine({
 
   const auditReport = useMemo(
     () =>
-      runPlatformScientificAudit({
+      runPlatformScientificAuditV2({
         investigations,
         gaps: RESEARCH_GAPS,
         evidenceCatalog,
         claims: presetVerifiedClaims,
         ingestedDatasets,
         analysisRuns: analysisHistory,
+        reproducibilityRecords,
         aiTelemetry: telemetry,
         checkedSourceCount: checkedSourcesCount,
-        retrievedDocumentCount: retrievedDocumentsCount,
         generatedReportCount: generatedReportsCount,
+        workspaceItemCount,
+        workspaceSchemaValid: true,
+        availableRouteCount: 14,
       }),
     [
       investigations,
@@ -281,10 +288,11 @@ export function EvidenceEngine({
       presetVerifiedClaims,
       ingestedDatasets,
       analysisHistory,
+      reproducibilityRecords,
       telemetry,
       checkedSourcesCount,
-      retrievedDocumentsCount,
       generatedReportsCount,
+      workspaceItemCount,
     ]
   );
 
@@ -821,10 +829,10 @@ export function EvidenceEngine({
           <Card padding="md" className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1">
               <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
-                FLAREX 6.0 Platform Scientific Audit Center (10 Categories)
+                FLAREX 7.0 Scientific Audit Center 2.0 (14 Categories)
               </h2>
               <p className="text-xs text-[var(--text-secondary)]">
-                Evaluates database, provenance, citations, datasets, statistics, cross-study comparison, AI grounding, report separation, API telemetry, and runtime readiness. Untested items remain explicitly marked <code>NOT TESTED</code>.
+                Evaluates source integrity, evidence traceability, citations, dataset provenance &amp; validation, unit consistency, numerical integrity, SHA-256 reproducibility, AI separation, report consistency, API health, 14-route readiness, workspace integrity, and unit test verification. Untested items remain explicitly marked <code>NOT TESTED</code>.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -844,8 +852,8 @@ export function EvidenceEngine({
                 size="sm"
                 onClick={() =>
                   triggerDownload(
-                    renderScientificAuditMarkdown(auditReport),
-                    'flarex6_scientific_audit.md',
+                    renderScientificAuditV2Markdown(auditReport),
+                    'flarex7_scientific_audit_v2.md',
                     'text/markdown;charset=utf-8'
                   )
                 }
@@ -860,7 +868,7 @@ export function EvidenceEngine({
                 onClick={() =>
                   triggerDownload(
                     JSON.stringify(auditReport, null, 2),
-                    'flarex6_scientific_audit.json',
+                    'flarex7_scientific_audit_v2.json',
                     'application/json;charset=utf-8'
                   )
                 }

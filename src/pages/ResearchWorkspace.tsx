@@ -48,7 +48,9 @@ interface ResearchWorkspaceProps {
   onDeleteBrief?: (id: string) => void;
   onDeleteEvidence?: (evidenceId: string) => void;
   onDeleteReport?: (id: string) => void;
-  onImportWorkspace?: (rawJson: string) => { ok: boolean; error?: string };
+  onDeleteReproducibility?: (runId: string) => void;
+  onDeleteDatasetSummary?: (datasetId: string) => void;
+  onImportWorkspace?: (rawJson: string) => { ok: boolean; error?: string; recoveryNotes?: string[] };
   onOpenInvestigation: (id: string) => void;
   onNavigate: (page: AppPage) => void;
 }
@@ -82,6 +84,8 @@ export function ResearchWorkspace({
   onDeleteBrief,
   onDeleteEvidence,
   onDeleteReport,
+  onDeleteReproducibility,
+  onDeleteDatasetSummary,
   onImportWorkspace,
   onOpenInvestigation,
   onNavigate,
@@ -91,10 +95,52 @@ export function ResearchWorkspace({
   const [colName, setColName] = useState('');
   const [colDesc, setColDesc] = useState('');
   const [workspaceQuery, setWorkspaceQuery] = useState('');
-  const [importStatus, setImportStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [importStatus, setImportStatus] = useState<{
+    ok: boolean;
+    message: string;
+    recoveryNotes?: string[];
+  } | null>(null);
   const [expandedBriefId, setExpandedBriefId] = useState<string | null>(null);
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const renderConfirmDelete = (
+    key: string,
+    label: string,
+    onConfirm: () => void
+  ) =>
+    confirmDeleteKey === key ? (
+      <div className="inline-flex items-center gap-1 shrink-0">
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            onConfirm();
+            setConfirmDeleteKey(null);
+          }}
+        >
+          Confirm
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setConfirmDeleteKey(null)}
+        >
+          Cancel
+        </Button>
+      </div>
+    ) : (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="shrink-0"
+        onClick={() => setConfirmDeleteKey(key)}
+        aria-label={label}
+      >
+        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+      </Button>
+    );
 
   const qLower = workspaceQuery.trim().toLowerCase();
 
@@ -195,6 +241,7 @@ export function ResearchWorkspace({
         message: res.ok
           ? `Imported workspace backup "${file.name}" successfully.`
           : res.error || 'Failed to import workspace JSON.',
+        recoveryNotes: res.recoveryNotes,
       });
     };
     reader.readAsText(file);
@@ -204,9 +251,9 @@ export function ResearchWorkspace({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Research Workspace 2.0"
-        title="Saved Studies, Questions, Briefs, Evidence & Reports"
-        description="Organize your microgravity combustion research workflow locally in this browser with full JSON backup export and restore."
+        eyebrow="Research Workspace 3.0"
+        title="Saved Studies, Reproducibility Runs, Datasets, Questions & Reports"
+        description="Organize your microgravity combustion research workflow locally in this browser with SHA-256 dataset & run ledgers, inline deletion guards, and malformed-backup recovery."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -257,13 +304,20 @@ export function ResearchWorkspace({
       {importStatus && (
         <Card
           padding="sm"
-          className={`text-xs ${
+          className={`text-xs space-y-1 ${
             importStatus.ok
               ? 'border-[var(--status-success)]/45 bg-[var(--status-success)]/10 text-[var(--status-success)]'
               : 'border-[var(--status-warning)]/45 bg-[var(--status-warning)]/10 text-[var(--status-warning)]'
           }`}
         >
-          {importStatus.message}
+          <p>{importStatus.message}</p>
+          {importStatus.recoveryNotes && importStatus.recoveryNotes.length > 0 && (
+            <ul className="list-disc pl-4 text-[11px] text-[var(--status-warning)] space-y-0.5">
+              {importStatus.recoveryNotes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          )}
         </Card>
       )}
 
@@ -329,15 +383,11 @@ export function ResearchWorkspace({
                       {rec.platform} · {rec.timeframe}
                     </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => onToggleSaveInvestigation(rec.id)}
-                    aria-label={`Remove ${rec.shortName} from workspace`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                  </Button>
+                  {renderConfirmDelete(
+                    `inv-${rec.id}`,
+                    `Remove ${rec.shortName} from workspace`,
+                    () => onToggleSaveInvestigation(rec.id)
+                  )}
                 </li>
               ))}
             </ul>
@@ -379,15 +429,11 @@ export function ResearchWorkspace({
                       {b.repository}
                     </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => onRemoveBookmark(b.url)}
-                    aria-label={`Remove bookmark ${b.title}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                  </Button>
+                  {renderConfirmDelete(
+                    `bmk-${b.url}`,
+                    `Remove bookmark ${b.title}`,
+                    () => onRemoveBookmark(b.url)
+                  )}
                 </li>
               ))}
             </ul>
@@ -450,15 +496,11 @@ export function ResearchWorkspace({
                     </div>
                     <p className="text-xs text-[var(--text-primary)] break-words">{n.content}</p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => onDeleteNote(n.id)}
-                    aria-label="Delete research note"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                  </Button>
+                  {renderConfirmDelete(
+                    `note-${n.id}`,
+                    'Delete research note',
+                    () => onDeleteNote(n.id)
+                  )}
                 </li>
               ))}
             </ul>
@@ -500,16 +542,12 @@ export function ResearchWorkspace({
                     >
                       Open
                     </Button>
-                    {onDeleteComparison && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onDeleteComparison(cmp.id)}
-                        aria-label={`Delete saved comparison ${cmp.title}`}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      </Button>
-                    )}
+                    {onDeleteComparison &&
+                      renderConfirmDelete(
+                        `cmp-${cmp.id}`,
+                        `Delete saved comparison ${cmp.title}`,
+                        () => onDeleteComparison(cmp.id)
+                      )}
                   </div>
                 </li>
               ))}
@@ -547,16 +585,12 @@ export function ResearchWorkspace({
                     <p className="text-xs font-medium text-[var(--text-primary)]">{q.question}</p>
                     <Badge tone="cyan">{q.classificationLabel}</Badge>
                   </div>
-                  {onDeleteQuestion && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDeleteQuestion(q.id)}
-                      aria-label={`Delete question ${q.question}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                    </Button>
-                  )}
+                  {onDeleteQuestion &&
+                    renderConfirmDelete(
+                      `q-${q.id}`,
+                      `Delete question ${q.question}`,
+                      () => onDeleteQuestion(q.id)
+                    )}
                 </li>
               ))}
             </ul>
@@ -619,16 +653,12 @@ export function ResearchWorkspace({
                         >
                           <Download className="w-3.5 h-3.5" aria-hidden="true" />
                         </Button>
-                        {onDeleteBrief && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDeleteBrief(brief.id)}
-                            aria-label={`Delete brief ${brief.title}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                          </Button>
-                        )}
+                        {onDeleteBrief &&
+                          renderConfirmDelete(
+                            `brief-${brief.id}`,
+                            `Delete brief ${brief.title}`,
+                            () => onDeleteBrief(brief.id)
+                          )}
                       </div>
                     </div>
                     {open && (
@@ -684,16 +714,12 @@ export function ResearchWorkspace({
                       {ev.summary}
                     </p>
                   </div>
-                  {onDeleteEvidence && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDeleteEvidence(ev.evidenceId)}
-                      aria-label={`Remove saved evidence ${ev.evidenceId}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                    </Button>
-                  )}
+                  {onDeleteEvidence &&
+                    renderConfirmDelete(
+                      `ev-${ev.evidenceId}`,
+                      `Remove saved evidence ${ev.evidenceId}`,
+                      () => onDeleteEvidence(ev.evidenceId)
+                    )}
                 </li>
               ))}
             </ul>
@@ -756,16 +782,12 @@ export function ResearchWorkspace({
                         >
                           <Download className="w-3.5 h-3.5" aria-hidden="true" />
                         </Button>
-                        {onDeleteReport && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDeleteReport(rep.id)}
-                            aria-label={`Delete report ${rep.title}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                          </Button>
-                        )}
+                        {onDeleteReport &&
+                          renderConfirmDelete(
+                            `rep-${rep.id}`,
+                            `Delete report ${rep.title}`,
+                            () => onDeleteReport(rep.id)
+                          )}
                       </div>
                     </div>
                     {open && (
@@ -886,14 +908,11 @@ export function ResearchWorkspace({
                     </p>
                   )}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onDeleteCollection(col.id)}
-                  aria-label={`Delete collection ${col.name}`}
-                >
-                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
-                </Button>
+                {renderConfirmDelete(
+                  `col-${col.id}`,
+                  `Delete collection ${col.name}`,
+                  () => onDeleteCollection(col.id)
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {col.investigationIds.map((id) => (
@@ -911,6 +930,95 @@ export function ResearchWorkspace({
           ))}
         </div>
       </Card>
+
+      {/* FLAREX 7.0 Workspace 3.0: Saved SHA-256 Reproducibility Runs & Imported Dataset Summaries */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <Card padding="md" className="lg:col-span-6 min-w-0 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-display text-sm font-bold text-[var(--text-primary)]">
+              Saved SHA-256 Reproducibility Runs ({workspace.savedReproducibilityRuns?.length ?? 0})
+            </h2>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate('data')}>
+              Workbench
+            </Button>
+          </div>
+          {(workspace.savedReproducibilityRuns?.length ?? 0) === 0 ? (
+            <p className="text-xs text-[var(--text-secondary)]">
+              Save any statistical run from Numerical Workbench to lock its SHA-256 checksum, parameters, and software version here.
+            </p>
+          ) : (
+            <ul className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(workspace.savedReproducibilityRuns ?? []).map((entry) => (
+                <li
+                  key={entry.runId}
+                  className="p-2.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex items-start justify-between gap-2"
+                >
+                  <div className="min-w-0 space-y-0.5 text-xs">
+                    <p className="font-semibold text-[var(--text-primary)] truncate">
+                      {entry.statisticalMethod} — {entry.filename}
+                    </p>
+                    <p className="font-mono-tabular text-[11px] text-[var(--accent-cyan)] truncate">
+                      {entry.runId} · SHA-256 {entry.sha256Checksum.slice(0, 14)}…
+                    </p>
+                    <p className="text-[11px] text-[var(--text-muted)] truncate">
+                      Vars: {entry.selectedVariables.join(', ')} · {new Date(entry.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  {onDeleteReproducibility &&
+                    renderConfirmDelete(
+                      `repro-${entry.runId}`,
+                      `Delete reproducibility run ${entry.runId}`,
+                      () => onDeleteReproducibility(entry.runId)
+                    )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card padding="md" className="lg:col-span-6 min-w-0 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-display text-sm font-bold text-[var(--text-primary)]">
+              Saved Dataset Summaries ({workspace.importedDatasetSummaries?.length ?? 0})
+            </h2>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate('data')}>
+              Data Explorer
+            </Button>
+          </div>
+          {(workspace.importedDatasetSummaries?.length ?? 0) === 0 ? (
+            <p className="text-xs text-[var(--text-secondary)]">
+              Pin imported dataset metadata and readiness summaries from Numerical Workbench to retain a permanent schema ledger.
+            </p>
+          ) : (
+            <ul className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {(workspace.importedDatasetSummaries ?? []).map((ds) => (
+                <li
+                  key={ds.datasetId}
+                  className="p-2.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex items-start justify-between gap-2"
+                >
+                  <div className="min-w-0 space-y-0.5 text-xs">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-semibold text-[var(--text-primary)] truncate">
+                        {ds.filename}
+                      </span>
+                      <Badge tone="blue">{ds.readiness}</Badge>
+                    </div>
+                    <p className="font-mono-tabular text-[11px] text-[var(--text-muted)] truncate">
+                      {ds.rowCount}×{ds.columnCount} · SHA-256 {ds.sha256Checksum.slice(0, 14)}…
+                    </p>
+                  </div>
+                  {onDeleteDatasetSummary &&
+                    renderConfirmDelete(
+                      `ds-${ds.datasetId}`,
+                      `Delete dataset summary ${ds.filename}`,
+                      () => onDeleteDatasetSummary(ds.datasetId)
+                    )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }

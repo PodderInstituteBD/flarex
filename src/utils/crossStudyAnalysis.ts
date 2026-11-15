@@ -52,6 +52,10 @@ export interface CrossStudyAnalysisReport {
   missingParameters: string[];
   incompatibleUnits: string[];
   differentMeasurementTechniques: string[];
+  matchedParameters: string[];
+  differingParameters: string[];
+  unknownParameters: string[];
+  falseEquivalenceGuards: string[];
   dimensions12: CrossStudyDimensionDetail[];
   base8Dimensions: ConditionDimensionComparison[];
   groundedExplanation: string;
@@ -86,6 +90,10 @@ export function analyzeCrossStudyComparison(
       missingParameters: ['At least 2 investigations are required for cross-study analysis.'],
       incompatibleUnits: [],
       differentMeasurementTechniques: [],
+      matchedParameters: [],
+      differingParameters: [],
+      unknownParameters: ['Select at least 2 investigations to inspect matched/differing/unknown parameters.'],
+      falseEquivalenceGuards: [],
       dimensions12: [],
       base8Dimensions: base8.dimensions,
       groundedExplanation:
@@ -345,6 +353,56 @@ export function analyzeCrossStudyComparison(
     );
   }
 
+  const matchedParameters = [
+    ...dimensions12.filter((d) => d.status === 'Aligned').map((d) => `${d.dimension}: ${d.note}`),
+    ...sharedExperimentalVariables.map((v) => `Shared variable: ${v}`),
+  ];
+
+  const differingParameters = [
+    ...dimensions12
+      .filter((d) => d.status === 'Incompatible' || d.status === 'Partially comparable')
+      .map((d) => `${d.dimension} (${d.status}): ${d.note}`),
+    ...differentExperimentalVariables.slice(0, 6).map((v) => `Study-specific variable: ${v}`),
+    ...incompatibleUnits.map((u) => `Unit divergence: ${u}`),
+  ];
+
+  const unknownParameters = Array.from(
+    new Set([
+      ...dimensions12.filter((d) => d.status === 'Missing').map((d) => `${d.dimension}: Not reported across all selected records`),
+      ...missingParameters,
+    ])
+  ).slice(0, 10);
+
+  const falseEquivalenceGuards: string[] = [];
+  if (hasMixedGravity) {
+    falseEquivalenceGuards.push(
+      '0g vs 1g Guard: Never equate terrestrial 1g buoyancy-dominated testing (e.g., UL battery/enclosure tests) with ISS 0g microgravity diffusion flames.'
+    );
+  }
+  if (selected.some((r) => r.id === 'acme-efield') && selected.length > 1) {
+    falseEquivalenceGuards.push(
+      'E-FIELD vs Partial Gravity Guard: High-voltage electrostatic ion winds (0–10 kV) alter flame stand-off without replicating lunar/Martian gravitational buoyancy.'
+    );
+  }
+  if (hasSaffireRackMix) {
+    falseEquivalenceGuards.push(
+      'Vehicle-Bay vs Bench-Scale Guard: Cygnus spacecraft cargo-bay radiative view factors and ducted volume differ fundamentally from bench-scale ISS rack flow tunnels.'
+    );
+  }
+  if (
+    selected.some((r) => /cool flame/i.test(`${r.name} ${r.reportedFindings ?? ''}`)) &&
+    selected.some((r) => /soot|smoke/i.test(`${r.name} ${r.reportedFindings ?? ''}`))
+  ) {
+    falseEquivalenceGuards.push(
+      'Cool Flame vs High-Temp Sooting Guard: Low-temperature peroxy radical cool-flame extinction pathways differ chemically from radiative soot-forming diffusion flames.'
+    );
+  }
+  if (hasPlannedWithoutFindings) {
+    falseEquivalenceGuards.push(
+      'Planned vs Completed Guard: Investigations without published flight results cannot be used as empirical confirmation alongside completed missions.'
+    );
+  }
+
   return {
     studyIds: selected.map((r) => r.id),
     studyShortNames: selected.map((r) => r.shortName),
@@ -355,6 +413,10 @@ export function analyzeCrossStudyComparison(
     missingParameters: missingParameters.slice(0, 8),
     incompatibleUnits,
     differentMeasurementTechniques,
+    matchedParameters,
+    differingParameters,
+    unknownParameters,
+    falseEquivalenceGuards,
     dimensions12,
     base8Dimensions: base8.dimensions,
     groundedExplanation: reasons.join(' '),

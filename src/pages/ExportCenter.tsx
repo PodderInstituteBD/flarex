@@ -20,6 +20,7 @@ import {
   generateExportJson,
   generateExportMarkdown,
 } from '../utils/exportCenter';
+import type { ReproducibilityRecord } from '../utils/reproducibilityEngine';
 import type { ReproducibleAnalysisRun } from '../utils/scientificAnalysis';
 import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
 import {
@@ -31,6 +32,7 @@ import {
   renderScientificReportMarkdown,
 } from '../utils/scientificReport';
 import { ResearchWorkspaceState, SavedReportEntry } from '../utils/workspaceStore';
+import { PublicationCenter } from './PublicationCenter';
 
 interface ExportCenterProps {
   investigations: InvestigationRecord[];
@@ -39,6 +41,7 @@ interface ExportCenterProps {
   initialReportType?: ExportReportType;
   ingestedDatasets?: IngestedDatasetPackage[];
   analysisHistory?: ReproducibleAnalysisRun[];
+  reproducibilityRecords?: ReproducibilityRecord[];
   onSaveReport?: (report: Omit<SavedReportEntry, 'id' | 'createdAt'>) => void;
   onReportDownloaded?: () => void;
 }
@@ -122,9 +125,11 @@ export function ExportCenter({
   initialReportType = 'investigation_report_v2',
   ingestedDatasets = [],
   analysisHistory = [],
+  reproducibilityRecords = [],
   onSaveReport,
   onReportDownloaded,
 }: ExportCenterProps) {
+  const [studioMode, setStudioMode] = useState<'publication7' | 'classicBundles'>('publication7');
   const [reportType, setReportType] = useState<ExportReportType>(initialReportType);
   const [previewFormat, setPreviewFormat] = useState<'csv' | 'json' | 'markdown'>(
     'markdown'
@@ -228,10 +233,36 @@ export function ExportCenter({
     <div className="space-y-6">
       <div className="print:hidden">
         <PageHeader
-          eyebrow="Scientific Export Center"
+          eyebrow="Scientific Export & Publication Center"
           title="Export Reproducible Research Packages"
-          description="Download verified FLAREX datasets, comparisons, source lists, gap analyses, and workspace notes in CSV, JSON, Markdown, or Print-to-PDF while preserving source provenance."
+          description="Generate publication-ready 9-section reports (Type A / B / C) with SHA-256 dataset checksums, or download structured FLAREX bundles in CSV, JSON, Markdown, and Print-to-PDF."
         />
+      </div>
+
+      {/* Mode Switcher */}
+      <div className="print:hidden flex flex-wrap items-center gap-2 border-b border-[var(--border-subtle)] pb-3">
+        <button
+          type="button"
+          onClick={() => setStudioMode('publication7')}
+          className={`px-3.5 py-2 text-xs font-medium rounded-[8px] border cursor-pointer transition-colors ${
+            studioMode === 'publication7'
+              ? 'bg-[var(--accent-blue)] text-[var(--accent-blue-contrast)] border-transparent font-semibold'
+              : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          Publication Studio (Type A / B / C · FLAREX 7.0)
+        </button>
+        <button
+          type="button"
+          onClick={() => setStudioMode('classicBundles')}
+          className={`px-3.5 py-2 text-xs font-medium rounded-[8px] border cursor-pointer transition-colors ${
+            studioMode === 'classicBundles'
+              ? 'bg-[var(--accent-blue)] text-[var(--accent-blue-contrast)] border-transparent font-semibold'
+              : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          All 10 Structured Data &amp; Archive Exports
+        </button>
       </div>
 
       {/* Provenance Guardrail Banner */}
@@ -246,8 +277,20 @@ export function ExportCenter({
         </p>
       </Card>
 
-      {/* Configuration Controls */}
-      <Card padding="md" className="print:hidden space-y-4">
+      {studioMode === 'publication7' ? (
+        <PublicationCenter
+          investigations={investigations}
+          compareIds={compareIds}
+          ingestedDatasets={ingestedDatasets}
+          analysisHistory={analysisHistory}
+          reproducibilityRecords={reproducibilityRecords}
+          onSaveReport={onSaveReport}
+          onReportDownloaded={onReportDownloaded}
+        />
+      ) : (
+        <>
+          {/* Configuration Controls */}
+          <Card padding="md" className="print:hidden space-y-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           <div className="lg:col-span-6 space-y-1.5">
             <label
@@ -415,6 +458,8 @@ export function ExportCenter({
           {activePreview}
         </pre>
       </Card>
+        </>
+      )}
     </div>
   );
 }

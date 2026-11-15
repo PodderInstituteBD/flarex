@@ -46,18 +46,28 @@ import {
 import { validateResearchDatabase } from '../utils/databaseValidator';
 import { LinkCheckResult, runDataQualityAudit } from '../utils/dataQualityMonitor';
 import { buildEvidenceClaims } from '../utils/evidenceEngine';
+import type { ReproducibilityRecord } from '../utils/reproducibilityEngine';
 import type { ReproducibleAnalysisRun } from '../utils/scientificAnalysis';
 import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
 import { computeScientificTrends } from '../utils/trendAnalysis';
+import type {
+  SavedDatasetSummaryEntry,
+  SavedReproducibilityEntry,
+} from '../utils/workspaceStore';
+import { ScientificVisualization } from './ScientificVisualization';
 
 interface ScientificDataExplorerProps {
   investigations: InvestigationRecord[];
   onOpenInvestigation: (id: string) => void;
   ingestedDatasets?: IngestedDatasetPackage[];
   analysisHistory?: ReproducibleAnalysisRun[];
+  reproducibilityRecords?: ReproducibilityRecord[];
   onIngestDataset?: (pkg: IngestedDatasetPackage) => void;
   onRemoveIngestedDataset?: (datasetId: string) => void;
   onRecordAnalysisRun?: (run: ReproducibleAnalysisRun) => void;
+  onRecordReproducibility?: (record: ReproducibilityRecord) => void;
+  onSaveReproducibilityToWorkspace?: (entry: SavedReproducibilityEntry) => void;
+  onSaveDatasetSummaryToWorkspace?: (entry: SavedDatasetSummaryEntry) => void;
   clientErrors?: ClientErrorLogItem[];
   onRecordClientError?: (source: string, message: string) => void;
 }
@@ -93,9 +103,13 @@ export function ScientificDataExplorer({
   onOpenInvestigation,
   ingestedDatasets = [],
   analysisHistory = [],
+  reproducibilityRecords = [],
   onIngestDataset = () => {},
   onRemoveIngestedDataset = () => {},
   onRecordAnalysisRun = () => {},
+  onRecordReproducibility,
+  onSaveReproducibilityToWorkspace,
+  onSaveDatasetSummaryToWorkspace,
   clientErrors = [],
   onRecordClientError,
 }: ScientificDataExplorerProps) {
@@ -453,15 +467,26 @@ export function ScientificDataExplorer({
         </Card>
       </section>
 
-      {/* FLAREX 5.0 Modules 2, 3, 4 & 7: Raw Data Ingestion, Numerical Analysis & Reproducibility */}
+      {/* FLAREX 7.0 Modules B–E & J: Raw Data Ingestion, Validation, Extended Stats & SHA-256 Reproducibility */}
       <NumericalWorkbench
         investigations={investigations}
         ingestedDatasets={ingestedDatasets}
         analysisHistory={analysisHistory}
+        reproducibilityRecords={reproducibilityRecords}
         onIngestDataset={onIngestDataset}
         onRemoveIngestedDataset={onRemoveIngestedDataset}
         onRecordAnalysisRun={onRecordAnalysisRun}
+        onRecordReproducibility={onRecordReproducibility}
+        onSaveReproducibilityToWorkspace={onSaveReproducibilityToWorkspace}
+        onSaveDatasetSummaryToWorkspace={onSaveDatasetSummaryToWorkspace}
         onRecordClientError={onRecordClientError}
+      />
+
+      {/* FLAREX 7.0 Module G: Publication-Grade Scientific Visualization Suite */}
+      <ScientificVisualization
+        investigations={investigations}
+        ingestedDatasets={ingestedDatasets}
+        analysisHistory={analysisHistory}
       />
 
       {/* Investigation, Unit Family & Variable Selector Controls */}

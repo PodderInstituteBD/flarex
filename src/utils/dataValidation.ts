@@ -10,6 +10,20 @@ export interface DataValidationCheckResult {
   affectedColumns: string[];
 }
 
+export interface DiscontinuityFlag {
+  column: string;
+  rowIndex: number;
+  delta: number;
+  medianAbsStep: number;
+}
+
+export interface ExtendedValidationDiagnostics {
+  discontinuityFlags: DiscontinuityFlag[];
+  samplingIrregularityDetected: boolean;
+  samplingCvPct: number | null;
+  metadataCompletenessPct: number;
+}
+
 export interface RawValidationDiagnostics {
   totalRows: number;
   totalCells: number;
@@ -23,6 +37,7 @@ export interface RawValidationDiagnostics {
   checks: DataValidationCheckResult[];
   warnings: string[];
   errors: string[];
+  extendedDiagnostics: ExtendedValidationDiagnostics;
 }
 
 function computeQuartiles(sorted: number[]): { q1: number; q3: number } {
@@ -367,6 +382,81 @@ export function runTwelveDataValidationChecks(
     affectedColumns: [],
   });
 
+  // Extended Module E diagnostics (non-breaking complement to checks[0..11])
+  const discontinuityFlags: DiscontinuityFlag[] = [];
+  for (const col of numericCols) {
+    if (col.inferredType === 'temporal') continue;
+    const seq: Array<{ idx: number; v: number }> = [];
+    dataset.normalizedRows.forEach((r, idx) => {
+      const val = r[col.normalizedName];
+      if (typeof val === 'number' && Number.isFinite(val)) {
+        seq.push({ idx, v: val });
+      }
+    });
+    if (seq.length < 6) continue;
+    const absSteps: Array<{ rowIndex: number; delta: number }> = [];
+    for (let i = 1; i < seq.length; i += 1) {
+      absSteps.push({
+        rowIndex: seq[i].idx,
+        delta: Math.abs(seq[i].v - seq[i - 1].v),
+      });
+    }
+    const sortedSteps = absSteps.map((s) => s.delta).sort((a, b) => a - b);
+    const medianStep = sortedSteps[Math.floor(sortedSteps.length / 2)] || 0;
+    const madStep = sortedSteps[Math.floor(sortedSteps.length * 0.75)] - sortedSteps[Math.floor(sortedSteps.length * 0.25)];
+    const threshold = medianStep > 0 ? medianStep * 8 : madStep > 0 ? madStep * 10 : 0;
+    if (threshold > 0) {
+      for (const s of absSteps) {
+        if (s.delta > threshold && discontinuityFlags.length < 15) {
+          discontinuityFlags.push({
+            column: col.originalName,
+            rowIndex: s.rowIndex,
+            delta: Number(s.delta.toFixed(4)),
+            medianAbsStep: Number(medianStep.toFixed(4)),
+          });
+        }
+      }
+    }
+  }
+  if (discontinuityFlags.length > 0) {
+    warnings.push(
+      `Discontinuity alert: ${discontinuityFlags.length} sudden step jump(s) (>8× median step) detected in numerical series.`
+    );
+  }
+
+  let samplingCvPct: number | null = null;
+  if (temporalCols.length > 0) {
+    const seq = dataset.normalizedRows
+      .map((r) => r[temporalCols[0].normalizedName])
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    const positiveDeltas: number[] = [];
+    for (let i = 1; i < seq.length; i += 1) {
+      const d = seq[i] - seq[i - 1];
+      if (d > 0) positiveDeltas.push(d);
+    }
+    if (positiveDeltas.length >= 2) {
+      const meanD = positiveDeltas.reduce((s, v) => s + v, 0) / positiveDeltas.length;
+      if (meanD > 0) {
+        const sdD = Math.sqrt(
+          positiveDeltas.reduce((s, v) => s + (v - meanD) ** 2, 0) /
+            (positiveDeltas.length - 1)
+        );
+        samplingCvPct = Number(((sdD / meanD) * 100).toFixed(1));
+      }
+    }
+  }
+
+  const metaChecks = [
+    Boolean(dataset.provenance.originalFilename),
+    Boolean(dataset.provenance.datasetDescription && dataset.provenance.datasetDescription.length >= 10),
+    Boolean(dataset.provenance.retrievalDate),
+    Boolean(dataset.provenance.sha256Checksum),
+    hasRealSource,
+  ];
+  const metadataCompletenessPct = Math.round(
+    (metaChecks.filter(Boolean).length / metaChecks.length) * 100
+  );
+
   return {
     totalRows,
     totalCells,
@@ -380,5 +470,11 @@ export function runTwelveDataValidationChecks(
     checks,
     warnings: Array.from(new Set(warnings)),
     errors: Array.from(new Set(errors)),
+    extendedDiagnostics: {
+      discontinuityFlags,
+      samplingIrregularityDetected: intervalIssueCols.length > 0,
+      samplingCvPct,
+      metadataCompletenessPct,
+    },
   };
 }

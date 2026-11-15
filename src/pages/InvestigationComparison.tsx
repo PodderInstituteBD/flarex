@@ -392,6 +392,59 @@ export function InvestigationComparison({
               </div>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--status-success)]/30 space-y-1">
+                <p className="font-semibold text-[var(--status-success)]">
+                  Matched Parameters ({crossStudyReport.matchedParameters.length})
+                </p>
+                <ul className="space-y-0.5 text-[11px] text-[var(--text-secondary)]">
+                  {crossStudyReport.matchedParameters.length > 0 ? (
+                    crossStudyReport.matchedParameters.map((p) => <li key={p}>• {p}</li>)
+                  ) : (
+                    <li className="italic text-[var(--text-muted)]">No identical parameter buckets</li>
+                  )}
+                </ul>
+              </div>
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--accent-blue)]/30 space-y-1">
+                <p className="font-semibold text-[var(--accent-blue)]">
+                  Differing Parameters ({crossStudyReport.differingParameters.length})
+                </p>
+                <ul className="space-y-0.5 text-[11px] text-[var(--text-secondary)]">
+                  {crossStudyReport.differingParameters.length > 0 ? (
+                    crossStudyReport.differingParameters.map((p) => <li key={p}>• {p}</li>)
+                  ) : (
+                    <li className="italic text-[var(--text-muted)]">No parameter divergences</li>
+                  )}
+                </ul>
+              </div>
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--status-warning)]/30 space-y-1">
+                <p className="font-semibold text-[var(--status-warning)]">
+                  Unknown / Omitted ({crossStudyReport.unknownParameters.length})
+                </p>
+                <ul className="space-y-0.5 text-[11px] text-[var(--text-secondary)]">
+                  {crossStudyReport.unknownParameters.length > 0 ? (
+                    crossStudyReport.unknownParameters.map((p) => <li key={p}>• {p}</li>)
+                  ) : (
+                    <li className="italic text-[var(--text-muted)]">No omissions flagged</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+
+            {crossStudyReport.falseEquivalenceGuards.length > 0 && (
+              <div className="p-3 rounded-[8px] bg-[var(--status-danger)]/10 border border-[var(--status-danger)]/35 space-y-1 text-xs">
+                <p className="font-semibold text-[var(--status-danger)] flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>False-Equivalence Shields</span>
+                </p>
+                <ul className="list-disc list-inside space-y-0.5 text-[11px] text-[var(--text-primary)]">
+                  {crossStudyReport.falseEquivalenceGuards.map((g) => (
+                    <li key={g}>{g}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 text-xs">
               {crossStudyReport.dimensions12.map((dim) => (
                 <div

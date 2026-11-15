@@ -65,6 +65,28 @@ export interface SavedReportEntry {
   createdAt: string;
 }
 
+export interface SavedReproducibilityEntry {
+  runId: string;
+  datasetId: string;
+  filename: string;
+  sha256Checksum: string;
+  statisticalMethod: string;
+  selectedVariables: string[];
+  timestamp: string;
+  resultSummary: Record<string, number | string | null>;
+}
+
+export interface SavedDatasetSummaryEntry {
+  datasetId: string;
+  filename: string;
+  rowCount: number;
+  columnCount: number;
+  sha256Checksum: string;
+  readiness: string;
+  sourceUrl: string;
+  savedAt: string;
+}
+
 export interface ResearchWorkspaceState {
   version: 1;
   savedInvestigationIds: string[];
@@ -76,6 +98,8 @@ export interface ResearchWorkspaceState {
   savedBriefs: SavedResearchBriefEntry[];
   savedEvidence: SavedEvidenceEntry[];
   savedReports: SavedReportEntry[];
+  savedReproducibilityRuns: SavedReproducibilityEntry[];
+  importedDatasetSummaries: SavedDatasetSummaryEntry[];
 }
 
 export const WORKSPACE_STORAGE_KEY = 'flarex_workspace_v1';
@@ -100,6 +124,8 @@ export function createEmptyWorkspace(): ResearchWorkspaceState {
     savedBriefs: [],
     savedEvidence: [],
     savedReports: [],
+    savedReproducibilityRuns: [],
+    importedDatasetSummaries: [],
   };
 }
 
@@ -201,6 +227,26 @@ export function sanitizeWorkspaceState(
       )
     : [];
 
+  const savedReproducibilityRuns = Array.isArray(obj.savedReproducibilityRuns)
+    ? obj.savedReproducibilityRuns.filter(
+        (r): r is SavedReproducibilityEntry =>
+          Boolean(r) &&
+          typeof r === 'object' &&
+          typeof (r as SavedReproducibilityEntry).runId === 'string' &&
+          typeof (r as SavedReproducibilityEntry).sha256Checksum === 'string'
+      )
+    : [];
+
+  const importedDatasetSummaries = Array.isArray(obj.importedDatasetSummaries)
+    ? obj.importedDatasetSummaries.filter(
+        (d): d is SavedDatasetSummaryEntry =>
+          Boolean(d) &&
+          typeof d === 'object' &&
+          typeof (d as SavedDatasetSummaryEntry).datasetId === 'string' &&
+          typeof (d as SavedDatasetSummaryEntry).filename === 'string'
+      )
+    : [];
+
   return {
     version: 1,
     savedInvestigationIds,
@@ -212,6 +258,8 @@ export function sanitizeWorkspaceState(
     savedBriefs,
     savedEvidence,
     savedReports,
+    savedReproducibilityRuns,
+    importedDatasetSummaries,
   };
 }
 
@@ -480,10 +528,80 @@ export function deleteWorkspaceReport(
   };
 }
 
+export function saveReproducibilityEntry(
+  state: ResearchWorkspaceState,
+  entry: SavedReproducibilityEntry
+): { state: ResearchWorkspaceState; duplicate: boolean } {
+  const existing = state.savedReproducibilityRuns ?? [];
+  const dup = existing.some(
+    (r) =>
+      r.runId === entry.runId ||
+      (r.sha256Checksum === entry.sha256Checksum &&
+        r.statisticalMethod === entry.statisticalMethod &&
+        r.selectedVariables.join('|') === entry.selectedVariables.join('|'))
+  );
+  if (dup) {
+    return { state, duplicate: true };
+  }
+  return {
+    state: {
+      ...state,
+      savedReproducibilityRuns: [entry, ...existing].slice(0, 40),
+    },
+    duplicate: false,
+  };
+}
+
+export function deleteReproducibilityEntry(
+  state: ResearchWorkspaceState,
+  runId: string
+): ResearchWorkspaceState {
+  return {
+    ...state,
+    savedReproducibilityRuns: (state.savedReproducibilityRuns ?? []).filter(
+      (r) => r.runId !== runId
+    ),
+  };
+}
+
+export function saveDatasetSummaryEntry(
+  state: ResearchWorkspaceState,
+  entry: SavedDatasetSummaryEntry
+): { state: ResearchWorkspaceState; duplicate: boolean } {
+  const existing = state.importedDatasetSummaries ?? [];
+  const dup = existing.some(
+    (d) =>
+      d.datasetId === entry.datasetId ||
+      (d.sha256Checksum && d.sha256Checksum === entry.sha256Checksum && d.filename === entry.filename)
+  );
+  if (dup) {
+    return { state, duplicate: true };
+  }
+  return {
+    state: {
+      ...state,
+      importedDatasetSummaries: [entry, ...existing].slice(0, 30),
+    },
+    duplicate: false,
+  };
+}
+
+export function deleteDatasetSummaryEntry(
+  state: ResearchWorkspaceState,
+  datasetId: string
+): ResearchWorkspaceState {
+  return {
+    ...state,
+    importedDatasetSummaries: (state.importedDatasetSummaries ?? []).filter(
+      (d) => d.datasetId !== datasetId
+    ),
+  };
+}
+
 export function exportWorkspaceBundle(state: ResearchWorkspaceState): string {
   return JSON.stringify(
     {
-      platform: 'FLAREX 6.0 — Research Workspace Backup',
+      platform: 'FLAREX 7.0 — Research Workspace Backup',
       exportedAt: new Date().toISOString(),
       workspace: state,
     },
@@ -495,28 +613,54 @@ export function exportWorkspaceBundle(state: ResearchWorkspaceState): string {
 export function importWorkspaceBundle(
   rawJson: string,
   validInvestigationIds?: ReadonlySet<string>
-): { ok: boolean; state?: ResearchWorkspaceState; error?: string } {
+): { ok: boolean; state?: ResearchWorkspaceState; error?: string; recoveryNotes?: string[] } {
   try {
     const parsed = JSON.parse(rawJson) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return { ok: false, error: 'Imported JSON is not a valid object.' };
     }
     const candidate =
       parsed.workspace && typeof parsed.workspace === 'object'
-        ? parsed.workspace
+        ? (parsed.workspace as Record<string, unknown>)
         : parsed;
-    if (
-      !('savedInvestigationIds' in (candidate as object)) &&
-      !('notes' in (candidate as object)) &&
-      !('savedBriefs' in (candidate as object))
-    ) {
+    const knownKeys = [
+      'savedInvestigationIds',
+      'notes',
+      'savedBriefs',
+      'savedReproducibilityRuns',
+      'importedDatasetSummaries',
+      'collections',
+    ];
+    if (!knownKeys.some((k) => k in candidate)) {
       return {
         ok: false,
         error: 'JSON file does not match a valid FLAREX workspace export structure.',
       };
     }
+
+    const recoveryNotes: string[] = [];
+    for (const key of [
+      'bookmarkedSources',
+      'savedComparisons',
+      'notes',
+      'savedQuestions',
+      'savedBriefs',
+      'savedEvidence',
+      'savedReports',
+      'savedReproducibilityRuns',
+      'importedDatasetSummaries',
+    ]) {
+      if (key in candidate && !Array.isArray(candidate[key])) {
+        recoveryNotes.push(`Malformed "${key}" field reset safely to empty list.`);
+      }
+    }
+
     const sanitized = sanitizeWorkspaceState(candidate, validInvestigationIds);
-    return { ok: true, state: sanitized };
+    return {
+      ok: true,
+      state: sanitized,
+      recoveryNotes: recoveryNotes.length > 0 ? recoveryNotes : undefined,
+    };
   } catch {
     return { ok: false, error: 'Invalid JSON syntax in workspace backup file.' };
   }

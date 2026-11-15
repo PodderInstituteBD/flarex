@@ -1,3 +1,13 @@
+import {
+  checkUnitCompatibility,
+  computeExtendedDescriptiveStats,
+  computeGroupedComparison,
+  computeMovingAverage,
+  computeSimpleLinearRegression,
+  computeSpearmanRankCorrelation,
+  type GroupedSummaryRow,
+  type MovingAveragePoint,
+} from './scientificComputation.ts';
 import type {
   IngestedDatasetPackage,
   ProvenanceLayer,
@@ -21,6 +31,19 @@ export interface DescriptiveStatsOutput {
   min: number;
   max: number;
   stdDev: number | null;
+  range?: number;
+  variance?: number | null;
+  q1?: number;
+  q2?: number;
+  q3?: number;
+  iqr?: number;
+  p10?: number;
+  p25?: number;
+  p50?: number;
+  p75?: number;
+  p90?: number;
+  outlierCount?: number;
+  outlierValues?: number[];
 }
 
 export interface HistogramBinOutput {
@@ -37,6 +60,12 @@ export interface CorrelationOutput {
   yUnit: string | null;
   pairCount: number;
   pearsonR: number;
+  spearmanRho?: number | null;
+  regressionSlope?: number | null;
+  regressionIntercept?: number | null;
+  regressionRSquared?: number | null;
+  regressionEquation?: string | null;
+  unitCompatibilityWarning?: string | null;
   interpretationNote: string;
 }
 
@@ -54,6 +83,8 @@ export interface TimeSeriesSummaryOutput {
   netDelta: number;
   peakValue: number;
   troughValue: number;
+  movingAverageWindow?: number;
+  movingAveragePreview?: MovingAveragePoint[];
 }
 
 export interface ReproducibleAnalysisRun {
@@ -80,31 +111,43 @@ export interface ReproducibleAnalysisRun {
   errorMessage?: string;
 }
 
-export const FLAREX_ANALYSIS_SOFTWARE_VERSION = 'FLAREX 5.0.0-science';
+export const FLAREX_ANALYSIS_SOFTWARE_VERSION = 'FLAREX 7.0.0-science';
 
 function computeDatasetFingerprint(dataset: IngestedDatasetPackage): string {
-  return `v1-${dataset.summary.rowCount}x${dataset.summary.columnCount}-${dataset.provenance.byteSize}B`;
+  const shaShort = dataset.provenance.sha256Checksum
+    ? `-${dataset.provenance.sha256Checksum.slice(0, 8)}`
+    : '';
+  return `v2-${dataset.summary.rowCount}x${dataset.summary.columnCount}-${dataset.provenance.byteSize}B${shaShort}`;
 }
 
 function roundStat(val: number): number {
   return Number(val.toFixed(4));
 }
 
+function getSourceRows(dataset: IngestedDatasetPackage) {
+  return dataset.analysisRows && dataset.analysisRows.length > 0
+    ? dataset.analysisRows
+    : dataset.normalizedRows;
+}
+
 function extractNumericSeries(
   dataset: IngestedDatasetPackage,
   normalizedKey: string
-): { values: number[]; missingCount: number } {
+): { values: number[]; missingCount: number; rawSeries: Array<number | null> } {
   const values: number[] = [];
+  const rawSeries: Array<number | null> = [];
   let missingCount = 0;
-  for (const row of dataset.normalizedRows) {
+  for (const row of getSourceRows(dataset)) {
     const v = row[normalizedKey];
     if (typeof v === 'number' && Number.isFinite(v)) {
       values.push(v);
+      rawSeries.push(v);
     } else {
       missingCount += 1;
+      rawSeries.push(null);
     }
   }
-  return { values, missingCount };
+  return { values, missingCount, rawSeries };
 }
 
 export function runDescriptiveAnalysis(
@@ -170,6 +213,12 @@ export function runDescriptiveAnalysis(
         )
       : null;
 
+  const ext = computeExtendedDescriptiveStats(
+    values,
+    varName,
+    unit
+  );
+
   // Build 6-bin histogram when span > 0
   const histogram: HistogramBinOutput[] = [];
   if (max > min && sorted.length >= 3) {
@@ -205,6 +254,19 @@ export function runDescriptiveAnalysis(
       min: roundStat(min),
       max: roundStat(max),
       stdDev: stdDev !== null ? roundStat(stdDev) : null,
+      range: ext?.range,
+      variance: ext?.sampleVariance ?? null,
+      q1: ext?.q1,
+      q2: ext?.q2,
+      q3: ext?.q3,
+      iqr: ext?.iqr,
+      p10: ext?.p10,
+      p25: ext?.p25,
+      p50: ext?.p50,
+      p75: ext?.p75,
+      p90: ext?.p90,
+      outlierCount: ext?.outlierCount,
+      outlierValues: ext?.outlierValues,
     },
     histogram,
   };
@@ -225,7 +287,7 @@ export function runCorrelationAnalysis(
 
   const pairs: Array<{ x: number; y: number }> = [];
   let droppedPairs = 0;
-  for (const row of dataset.normalizedRows) {
+  for (const row of getSourceRows(dataset)) {
     const xv = row[xKey];
     const yv = row[yKey];
     if (
@@ -239,6 +301,8 @@ export function runCorrelationAnalysis(
       droppedPairs += 1;
     }
   }
+
+  const unitCheck = checkUnitCompatibility(xUnit, yUnit, 'CORRELATION_OR_SCATTER');
 
   const baseRun: ReproducibleAnalysisRun = {
     runId: `run-corr-${xKey}-${yKey}-${Date.now()}`,
@@ -305,8 +369,14 @@ export function runCorrelationAnalysis(
   const strength =
     absR >= 0.8 ? 'strong' : absR >= 0.5 ? 'moderate' : absR >= 0.3 ? 'weak' : 'negligible';
 
+  const xs = pairs.map((p) => p.x);
+  const ys = pairs.map((p) => p.y);
+  const spearman = computeSpearmanRankCorrelation(xs, ys);
+  const regression = computeSimpleLinearRegression(xs, ys);
+
   return {
     ...baseRun,
+    calculationMethodLabel: 'Pearson (r), Spearman Rank (rho) & OLS Linear Regression',
     correlation: {
       xVariable: xName,
       xUnit,
@@ -314,7 +384,15 @@ export function runCorrelationAnalysis(
       yUnit,
       pairCount: n,
       pearsonR: roundStat(r),
-      interpretationNote: `Observed ${strength} ${r >= 0 ? 'positive' : 'negative'} linear association (r = ${roundStat(r)}, n = ${n}). Does NOT imply causation.`,
+      spearmanRho: spearman?.rho ?? null,
+      regressionSlope: regression?.slope ?? null,
+      regressionIntercept: regression?.intercept ?? null,
+      regressionRSquared: regression?.rSquared ?? null,
+      regressionEquation: regression?.equationLabel ?? null,
+      unitCompatibilityWarning: unitCheck.warningMessage,
+      interpretationNote: `Observed ${strength} ${r >= 0 ? 'positive' : 'negative'} linear association (r = ${roundStat(r)}${
+        spearman ? `, Spearman rho = ${spearman.rho}` : ''
+      }${regression ? `, R² = ${regression.rSquared}` : ''}, n = ${n}). Does NOT imply causation.`,
     },
   };
 }
@@ -393,6 +471,11 @@ export function runTimeSeriesSummaryAnalysis(
     ? series
     : [...series].sort((a, b) => a.t - b.t);
   const vals = ordered.map((p) => p.v);
+  const maWindow = Math.min(5, Math.max(2, Math.floor(ordered.length / 4) || 2));
+  const movingAveragePreview = computeMovingAverage(
+    ordered.slice(0, 200).map((p) => ({ x: p.t, y: p.v })),
+    maWindow
+  );
 
   return {
     ...baseRun,
@@ -410,8 +493,35 @@ export function runTimeSeriesSummaryAnalysis(
       netDelta: roundStat(ordered[ordered.length - 1].v - ordered[0].v),
       peakValue: roundStat(Math.max(...vals)),
       troughValue: roundStat(Math.min(...vals)),
+      movingAverageWindow: maWindow,
+      movingAveragePreview,
     },
   };
+}
+
+export function analyzeGroupedVariable(
+  dataset: IngestedDatasetPackage,
+  groupKey: string,
+  valueKey: string
+): GroupedSummaryRow[] {
+  return computeGroupedComparison(getSourceRows(dataset), groupKey, valueKey);
+}
+
+export function analyzeMovingAverage(
+  dataset: IngestedDatasetPackage,
+  timeKey: string | null,
+  valueKey: string,
+  windowSize = 3
+): MovingAveragePoint[] {
+  const points: Array<{ x: number | null; y: number }> = [];
+  for (const row of getSourceRows(dataset)) {
+    const y = row[valueKey];
+    if (typeof y !== 'number' || !Number.isFinite(y)) continue;
+    const xRaw = timeKey ? row[timeKey] : null;
+    const x = typeof xRaw === 'number' && Number.isFinite(xRaw) ? xRaw : null;
+    points.push({ x, y });
+  }
+  return computeMovingAverage(points, windowSize);
 }
 
 export function reproduceAnalysisRun(

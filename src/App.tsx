@@ -21,8 +21,13 @@ import {
   shouldIgnoreShortcutEvent,
 } from './utils/keyboardShortcuts';
 import { computeResearchStats, DomainCategoryId } from './utils/researchLogic';
+import type { ReproducibilityRecord } from './utils/reproducibilityEngine';
 import { ReproducibleAnalysisRun } from './utils/scientificAnalysis';
 import { IngestedDatasetPackage } from './utils/scientificIngestion';
+import {
+  appendSourceCheckHistory,
+  SourceCheckHistoryEntry,
+} from './utils/sourceTransparency';
 import { detectScientificConflicts } from './utils/scientificUncertainty';
 import { buildResearchUrlPath, parseResearchUrlState } from './utils/urlState';
 import {
@@ -30,6 +35,8 @@ import {
   BookmarkedSourceEntry,
   createCollection,
   deleteCollection,
+  deleteDatasetSummaryEntry,
+  deleteReproducibilityEntry,
   deleteResearchBrief,
   deleteResearchNote,
   deleteResearchQuestion,
@@ -39,9 +46,13 @@ import {
   importWorkspaceBundle,
   loadWorkspaceFromStorage,
   ResearchWorkspaceState,
+  SavedDatasetSummaryEntry,
   SavedEvidenceEntry,
   SavedReportEntry,
+  SavedReproducibilityEntry,
   SavedResearchBriefEntry,
+  saveDatasetSummaryEntry,
+  saveReproducibilityEntry,
   saveResearchBrief,
   saveResearchQuestion,
   saveWorkspaceReport,
@@ -131,12 +142,15 @@ export interface ClientErrorLogItem {
 interface StoredScienceSession {
   ingestedDatasets: IngestedDatasetPackage[];
   analysisHistory: ReproducibleAnalysisRun[];
+  reproducibilityRecords?: ReproducibilityRecord[];
 }
 
 function readStoredScienceSession(): StoredScienceSession {
   try {
     const raw = window.localStorage.getItem(STORAGE_FLAREX5_SESSION_KEY);
-    if (!raw) return { ingestedDatasets: [], analysisHistory: [] };
+    if (!raw) {
+      return { ingestedDatasets: [], analysisHistory: [], reproducibilityRecords: [] };
+    }
     const parsed = JSON.parse(raw) as Partial<StoredScienceSession>;
     return {
       ingestedDatasets: Array.isArray(parsed.ingestedDatasets)
@@ -145,9 +159,12 @@ function readStoredScienceSession(): StoredScienceSession {
       analysisHistory: Array.isArray(parsed.analysisHistory)
         ? parsed.analysisHistory.slice(0, 20)
         : [],
+      reproducibilityRecords: Array.isArray(parsed.reproducibilityRecords)
+        ? parsed.reproducibilityRecords.slice(0, 30)
+        : [],
     };
   } catch {
-    return { ingestedDatasets: [], analysisHistory: [] };
+    return { ingestedDatasets: [], analysisHistory: [], reproducibilityRecords: [] };
   }
 }
 
@@ -260,6 +277,10 @@ export default function App() {
   const [analysisHistory, setAnalysisHistory] = useState<ReproducibleAnalysisRun[]>(
     initialSession.analysisHistory
   );
+  const [reproducibilityRecords, setReproducibilityRecords] = useState<
+    ReproducibilityRecord[]
+  >(initialSession.reproducibilityRecords ?? []);
+  const [sourceCheckHistory, setSourceCheckHistory] = useState<SourceCheckHistoryEntry[]>([]);
   const [activeDocumentForAi, setActiveDocumentForAi] =
     useState<ActiveAiDocumentContext | null>(null);
   const [clientErrors, setClientErrors] = useState<ClientErrorLogItem[]>([]);
@@ -323,18 +344,20 @@ export default function App() {
         ...ds,
         originalRows: ds.originalRows.slice(0, 250),
         normalizedRows: ds.normalizedRows.slice(0, 250),
+        analysisRows: ds.analysisRows ? ds.analysisRows.slice(0, 250) : undefined,
       }));
       window.localStorage.setItem(
         STORAGE_FLAREX5_SESSION_KEY,
         JSON.stringify({
           ingestedDatasets: compactDatasets,
           analysisHistory: analysisHistory.slice(0, 20),
+          reproducibilityRecords: reproducibilityRecords.slice(0, 30),
         })
       );
     } catch {
       // Ignore storage quota overflow on large CSV uploads
     }
-  }, [ingestedDatasets, analysisHistory]);
+  }, [ingestedDatasets, analysisHistory, reproducibilityRecords]);
 
   const handleIngestDataset = useCallback((pkg: IngestedDatasetPackage) => {
     setIngestedDatasets((prev) => [
@@ -352,6 +375,19 @@ export default function App() {
   const handleRecordAnalysisRun = useCallback((run: ReproducibleAnalysisRun) => {
     setAnalysisHistory((prev) => [run, ...prev].slice(0, 25));
   }, []);
+
+  const handleRecordReproducibility = useCallback((record: ReproducibilityRecord) => {
+    setReproducibilityRecords((prev) =>
+      [record, ...prev.filter((r) => r.runId !== record.runId)].slice(0, 35)
+    );
+  }, []);
+
+  const handleLogSourceCheck = useCallback(
+    (entry: Omit<SourceCheckHistoryEntry, 'id'>) => {
+      setSourceCheckHistory((prev) => appendSourceCheckHistory(prev, entry));
+    },
+    []
+  );
 
   const handleRecordClientError = useCallback((source: string, message: string) => {
     setClientErrors((prev) =>
@@ -812,13 +848,59 @@ export default function App() {
     [showCopyToast]
   );
 
+  const handleSaveReproducibilityToWorkspace = useCallback(
+    (entry: SavedReproducibilityEntry) => {
+      setWorkspace((prev) => {
+        const res = saveReproducibilityEntry(prev, entry);
+        showCopyToast(
+          res.duplicate
+            ? 'Reproducibility run already saved in workspace'
+            : 'Reproducibility run saved to workspace'
+        );
+        return res.state;
+      });
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteReproducibility = useCallback(
+    (runId: string) => {
+      setWorkspace((prev) => deleteReproducibilityEntry(prev, runId));
+      showCopyToast('Saved reproducibility run removed');
+    },
+    [showCopyToast]
+  );
+
+  const handleSaveDatasetSummaryToWorkspace = useCallback(
+    (entry: SavedDatasetSummaryEntry) => {
+      setWorkspace((prev) => {
+        const res = saveDatasetSummaryEntry(prev, entry);
+        showCopyToast(
+          res.duplicate
+            ? 'Dataset summary already saved in workspace'
+            : 'Dataset summary saved to workspace'
+        );
+        return res.state;
+      });
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteDatasetSummary = useCallback(
+    (datasetId: string) => {
+      setWorkspace((prev) => deleteDatasetSummaryEntry(prev, datasetId));
+      showCopyToast('Saved dataset summary removed');
+    },
+    [showCopyToast]
+  );
+
   const handleImportWorkspace = useCallback(
-    (rawJson: string): { ok: boolean; error?: string } => {
+    (rawJson: string): { ok: boolean; error?: string; recoveryNotes?: string[] } => {
       const outcome = importWorkspaceBundle(rawJson, VALID_INVESTIGATION_IDS);
       if (outcome.ok && outcome.state) {
         setWorkspace(outcome.state);
         showCopyToast('Workspace imported from JSON backup');
-        return { ok: true };
+        return { ok: true, recoveryNotes: outcome.recoveryNotes };
       }
       return { ok: false, error: outcome.error || 'Import failed.' };
     },
@@ -860,7 +942,9 @@ export default function App() {
     workspace.savedQuestions.length +
     workspace.savedBriefs.length +
     workspace.savedEvidence.length +
-    workspace.savedReports.length;
+    workspace.savedReports.length +
+    (workspace.savedReproducibilityRuns?.length ?? 0) +
+    (workspace.importedDatasetSummaries?.length ?? 0);
 
   useEffect(() => {
     const pageTitles: Record<AppPage, string> = {
@@ -920,11 +1004,13 @@ export default function App() {
           onOpenDemoMode={() => setDemoOpen(true)}
           evidenceSummary={dashboardEvidenceSummary}
           sessionMetrics={{
-            checkedSourcesCount,
+            checkedSourcesCount: Math.max(checkedSourcesCount, sourceCheckHistory.length),
             retrievedDocumentsCount: retrievedDocTitles.length,
-            generatedReportsCount,
+            generatedReportsCount: Math.max(generatedReportsCount, workspace.savedReports.length),
             importedDatasetsCount: ingestedDatasets.length,
             analysisRunsCount: analysisHistory.length,
+            reproducibilityRunsCount: reproducibilityRecords.length,
+            workspaceCount,
           }}
           onOpenEvidenceTab={(tab) => {
             setEvidenceInitialTab(tab);
@@ -983,9 +1069,13 @@ export default function App() {
             onOpenInvestigation={handleOpenInvestigation}
             ingestedDatasets={ingestedDatasets}
             analysisHistory={analysisHistory}
+            reproducibilityRecords={reproducibilityRecords}
             onIngestDataset={handleIngestDataset}
             onRemoveIngestedDataset={handleRemoveIngestedDataset}
             onRecordAnalysisRun={handleRecordAnalysisRun}
+            onRecordReproducibility={handleRecordReproducibility}
+            onSaveReproducibilityToWorkspace={handleSaveReproducibilityToWorkspace}
+            onSaveDatasetSummaryToWorkspace={handleSaveDatasetSummaryToWorkspace}
             clientErrors={clientErrors}
             onRecordClientError={handleRecordClientError}
           />
@@ -1029,9 +1119,11 @@ export default function App() {
             onOpenInvestigation={handleOpenInvestigation}
             ingestedDatasets={ingestedDatasets}
             analysisHistory={analysisHistory}
-            checkedSourcesCount={checkedSourcesCount}
+            reproducibilityRecords={reproducibilityRecords}
+            workspaceItemCount={workspaceCount}
+            checkedSourcesCount={Math.max(checkedSourcesCount, sourceCheckHistory.length)}
             retrievedDocumentsCount={retrievedDocTitles.length}
-            generatedReportsCount={generatedReportsCount}
+            generatedReportsCount={Math.max(generatedReportsCount, workspace.savedReports.length)}
             aiInterpretations={aiInterpretations}
             savedEvidenceIds={workspace.savedEvidence.map((e) => e.evidenceId)}
             onToggleSaveEvidence={handleToggleSaveEvidence}
@@ -1091,6 +1183,8 @@ export default function App() {
             onDeleteBrief={handleDeleteResearchBrief}
             onDeleteEvidence={handleDeleteSavedEvidence}
             onDeleteReport={handleDeleteSavedReport}
+            onDeleteReproducibility={handleDeleteReproducibility}
+            onDeleteDatasetSummary={handleDeleteDatasetSummary}
             onImportWorkspace={handleImportWorkspace}
             onOpenInvestigation={handleOpenInvestigation}
             onNavigate={handleNavigate}
@@ -1107,6 +1201,7 @@ export default function App() {
             initialReportType={exportReportType}
             ingestedDatasets={ingestedDatasets}
             analysisHistory={analysisHistory}
+            reproducibilityRecords={reproducibilityRecords}
             onSaveReport={handleSaveReport}
             onReportDownloaded={() => setGeneratedReportsCount((c) => c + 1)}
           />
@@ -1137,6 +1232,8 @@ export default function App() {
             }
             ingestedDatasets={ingestedDatasets}
             retrievedDocTitles={retrievedDocTitles}
+            sourceCheckHistory={sourceCheckHistory}
+            onLogSourceCheck={handleLogSourceCheck}
           />
         </Suspense>
       )}

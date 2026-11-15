@@ -40,12 +40,25 @@ function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
 export class GeminiAiProvider implements AiServiceProvider {
   public readonly providerName = 'Google Gemini Free-Tier SDK';
   public readonly model: string;
+  public readonly defaultTimeoutMs: number;
+  public readonly maxRetries: number;
 
   private telemetry: AiProviderTelemetry;
   private recentErrors: SystemErrorEntry[] = [];
 
   constructor(model: string) {
     this.model = model;
+    const rawTimeout = Number(process.env.GEMINI_TIMEOUT_MS);
+    this.defaultTimeoutMs =
+      Number.isFinite(rawTimeout) && rawTimeout >= 5000 && rawTimeout <= 60_000
+        ? Math.round(rawTimeout)
+        : 30_000;
+    const rawRetries = Number(process.env.GEMINI_MAX_RETRIES);
+    this.maxRetries =
+      Number.isFinite(rawRetries) && rawRetries >= 1 && rawRetries <= 3
+        ? Math.round(rawRetries)
+        : 2;
+
     this.telemetry = {
       providerName: this.providerName,
       model,
@@ -107,8 +120,8 @@ export class GeminiAiProvider implements AiServiceProvider {
       },
     });
 
-    const timeoutMs = request.timeoutMs ?? 30_000;
-    const maxAttempts = 2;
+    const timeoutMs = request.timeoutMs ?? this.defaultTimeoutMs;
+    const maxAttempts = this.maxRetries;
     const startMs = Date.now();
     this.telemetry.totalRequests += 1;
 
@@ -202,8 +215,9 @@ export class GeminiAiProvider implements AiServiceProvider {
           throw lastError;
         }
 
-        const backoffMs = computeBackoffDelayMs(attempt, 650);
-        await sleepWithAbort(backoffMs, request.signal);
+        const baseBackoff = computeBackoffDelayMs(attempt, 650);
+        const jitterMs = Math.round(Math.random() * 250);
+        await sleepWithAbort(baseBackoff + jitterMs, request.signal);
       }
     }
 

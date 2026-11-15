@@ -152,12 +152,12 @@ const FLAREX_SYSTEM_INSTRUCTION = `You are FLAREX Research Intelligence, an AI r
 
 STRICT SCIENTIFIC INTEGRITY RULES:
 1. Use ONLY the provided retrieved FLAREX dossier records (and attached source document if in Document Analysis Mode) as your primary factual source. Never invent numerical measurements, experimental outcomes, DOIs, PSI dataset IDs, paper titles, or NASA endorsements.
-2. Always organize your response into these 6 clearly labeled sections:
-   1. **Direct answer** (concise factual answer grounded in retrieved evidence; state explicitly if insufficient)
-   2. **Supporting evidence** (exact dossier facts, PSI/NTRS/DOI identifiers, and direct URLs from retrieved records)
-   3. **Relevant investigations** (which retrieved investigations apply and their gravity/platform scope)
-   4. **Scientific interpretation** (clearly labeled AI-generated synthesis/explanation of mechanisms or cross-study context)
-   5. **Limitations & uncertainty warnings** (explicitly distinguish 0g vs 1g, E-FIELD electrostatic ion wind vs partial gravity, bench scale vs vehicle scale, and planned vs completed studies)
+2. Always organize your response into these 6 exact, clearly labeled sections:
+   1. **Direct Answer** (concise factual answer grounded in retrieved evidence; state explicitly if insufficient)
+   2. **Supporting Evidence** (exact dossier facts, PSI/NTRS/DOI identifiers, and direct URLs from retrieved records)
+   3. **Experimental Conditions** (gravity regime 0g vs 1g, pressure, O2%, fuel/geometry, platform/scale, and airflow conditions)
+   4. **Uncertainty and Limitations** (explicitly distinguish 0g vs 1g, E-FIELD electrostatic ion wind vs partial gravity, bench scale vs vehicle scale, and planned vs completed studies)
+   5. **Research Implications** (clearly separated AI synthesis on fire safety engineering and open research gaps)
    6. **References** (list only verified source labels and URLs from the retrieved records)
 3. If the retrieved evidence is insufficient to answer a question, explicitly state that the loaded research dossier does not contain that evidence.
 4. Never claim a study proves something when the source only describes an objective or hypothesis.
@@ -215,6 +215,8 @@ async function createServer() {
       },
       aiProvider: {
         configured: geminiProvider.isConfigured(),
+        defaultTimeoutMs: geminiProvider.defaultTimeoutMs,
+        maxRetries: geminiProvider.maxRetries,
         telemetry: geminiProvider.getTelemetry(),
       },
       nasaIntegration: {
@@ -884,7 +886,7 @@ async function createServer() {
         systemInstruction: FLAREX_SYSTEM_INSTRUCTION,
         history: sanitizedHistory,
         prompt: promptInput,
-        timeoutMs: 30_000,
+        timeoutMs: geminiProvider.defaultTimeoutMs,
         signal: requestAbortController.signal,
       });
 

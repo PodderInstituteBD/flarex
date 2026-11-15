@@ -36,7 +36,17 @@ import {
   ReferenceFilterCategory,
 } from '../utils/researchLogic';
 import { runTwelveDataValidationChecks } from '../utils/dataValidation';
+import {
+  buildUnifiedDiscovery2,
+  NasaAvailabilityStage10,
+  STAGE10_META,
+  summarizeDiscoveryStages,
+} from '../utils/nasaDataDiscovery';
 import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
+import {
+  buildSourceTransparencyRegistry,
+  SourceCheckHistoryEntry,
+} from '../utils/sourceTransparency';
 import {
   LinkCheckState,
   resolveResourceVerificationStatus,
@@ -76,6 +86,8 @@ interface SourcesReferencesProps {
   onRecordRetrievedDocument?: (title: string) => void;
   ingestedDatasets?: IngestedDatasetPackage[];
   retrievedDocTitles?: string[];
+  sourceCheckHistory?: SourceCheckHistoryEntry[];
+  onLogSourceCheck?: (entry: Omit<SourceCheckHistoryEntry, 'id'>) => void;
 }
 
 const REFERENCE_FILTER_TABS: Array<{
@@ -101,6 +113,8 @@ export function SourcesReferences({
   onRecordRetrievedDocument,
   ingestedDatasets = [],
   retrievedDocTitles = [],
+  sourceCheckHistory = [],
+  onLogSourceCheck,
 }: SourcesReferencesProps) {
   const [ntrsQuery, setNtrsQuery] = useState('BASS-II microgravity combustion');
   const [ntrsLoading, setNtrsLoading] = useState(false);
@@ -186,6 +200,23 @@ export function SourcesReferences({
       setNtrsTextStatus(
         `File successfully retrieved: NTRS ${id} (${((data.byteLength ?? data.content.length) / 1024).toFixed(1)} KB .txt). Sending to AI Mode B...`
       );
+      const nowIso = new Date().toISOString();
+      setFetchedNtrsIds((prev) => new Set(prev).add(id));
+      const fullTxtUrl = data.sourceUrl ?? `https://ntrs.nasa.gov/api/citations/${id}/downloads/${id}.txt`;
+      setRetrievedUrlTimestamps((prev) => ({
+        ...prev,
+        [fullTxtUrl]: nowIso,
+        [`https://ntrs.nasa.gov/citations/${id}`]: nowIso,
+      }));
+      onLogSourceCheck?.({
+        sourceName: `${title} (NTRS ${id})`,
+        url: fullTxtUrl,
+        method: 'NASA NTRS Full-Text Download',
+        httpStatus: 200,
+        resultingStage: 'FILE_RETRIEVED',
+        checkedAt: nowIso,
+        note: `Retrieved ${((data.byteLength ?? data.content.length) / 1024).toFixed(1)} KB ASCII manuscript.`,
+      });
       onRecordRetrievedDocument?.(`${title} (NTRS ${id})`);
       onAttachNtrsDocument?.({
         title: `${title} (NTRS ${id})`,
@@ -209,15 +240,66 @@ export function SourcesReferences({
   const [discYear, setDiscYear] = useState('ALL');
   const [discEvidence, setDiscEvidence] = useState('ALL');
   const [discAvailability, setDiscAvailability] = useState('ALL');
+  const [discStage10, setDiscStage10] = useState<NasaAvailabilityStage10 | 'ALL'>('ALL');
   const [expandedResourceId, setExpandedResourceId] = useState<string | null>(null);
   const [batchChecking, setBatchChecking] = useState(false);
   const [linkStatusMap, setLinkStatusMap] = useState<
     Record<string, LinkCheckState>
   >({});
+  const [retrievedUrlTimestamps, setRetrievedUrlTimestamps] = useState<Record<string, string>>({});
+  const [fetchedNtrsIds, setFetchedNtrsIds] = useState<Set<number>>(
+    () => new Set<number>()
+  );
 
   const discoveryIndex = useMemo(
     () => buildDiscoveryIndex(investigations, OFFICIAL_RESOURCES, DOSSIER_REFERENCES),
     [investigations]
+  );
+
+  const discovery2Items = useMemo(() => {
+    const validatedIds = new Set(
+      ingestedDatasets
+        .filter((ds) =>
+          runTwelveDataValidationChecks(ds).checks.every((c) => c.status !== 'FAIL')
+        )
+        .map((ds) => ds.provenance.datasetId)
+    );
+    return buildUnifiedDiscovery2(investigations, OFFICIAL_RESOURCES, DOSSIER_REFERENCES, {
+      linkChecks: linkStatusMap,
+      retrievedUrls: retrievedUrlTimestamps,
+      ingestedDatasets,
+      validatedDatasetIds: validatedIds,
+      analysisReadyDatasetIds: validatedIds,
+      fetchedNtrsIds,
+      awsS3Verified: Boolean(psiBrowseData),
+    });
+  }, [
+    investigations,
+    linkStatusMap,
+    retrievedUrlTimestamps,
+    ingestedDatasets,
+    fetchedNtrsIds,
+    psiBrowseData,
+  ]);
+
+  const discovery2ById = useMemo(
+    () => new Map(discovery2Items.map((it) => [it.id, it])),
+    [discovery2Items]
+  );
+
+  const stage10Counts = useMemo(
+    () => summarizeDiscoveryStages(discovery2Items),
+    [discovery2Items]
+  );
+
+  const transparencyRegistry = useMemo(
+    () =>
+      buildSourceTransparencyRegistry({
+        discoveryItems: discovery2Items,
+        officialResources: OFFICIAL_RESOURCES,
+        investigations,
+      }),
+    [discovery2Items, investigations]
   );
 
   const discYears = useMemo(
@@ -242,6 +324,9 @@ export function SourcesReferences({
         year: discYear,
         evidenceType: discEvidence,
         dataAvailability: discAvailability,
+      }).filter((item) => {
+        if (discStage10 === 'ALL') return true;
+        return discovery2ById.get(item.id)?.stage10 === discStage10;
       }),
     [
       discoveryIndex,
@@ -252,6 +337,8 @@ export function SourcesReferences({
       discYear,
       discEvidence,
       discAvailability,
+      discStage10,
+      discovery2ById,
     ]
   );
 
@@ -261,11 +348,21 @@ export function SourcesReferences({
   );
 
   const handleCheckUrl = async (item: DiscoveryResourceItem) => {
+    const nowIso = new Date().toISOString();
     if (!item.url.startsWith('https://')) {
       setLinkStatusMap((prev) => ({
         ...prev,
-        [item.url]: { ok: true, status: 200, note: 'Bundled local asset' },
+        [item.url]: { ok: true, status: 200, note: 'Bundled local asset', checkedAt: nowIso },
       }));
+      onLogSourceCheck?.({
+        sourceName: item.title,
+        url: item.url,
+        method: 'Bundled Workspace File',
+        httpStatus: 200,
+        resultingStage: 'FILE_RETRIEVED',
+        checkedAt: nowIso,
+        note: 'Verified bundled dossier file locally.',
+      });
       return;
     }
     setLinkStatusMap((prev) => ({
@@ -290,24 +387,48 @@ export function SourcesReferences({
             ok: hit.ok,
             status: hit.status,
             note: hit.note,
-            checkedAt: hit.checkedAt,
+            checkedAt: hit.checkedAt ?? nowIso,
           },
         }));
+        onLogSourceCheck?.({
+          sourceName: item.title,
+          url: item.url,
+          method: 'HTTP HEAD/GET Availability Probe',
+          httpStatus: hit.status,
+          resultingStage: hit.ok
+            ? item.repository === 'NASA_PSI'
+              ? 'MANUAL_REVIEW_REQUIRED'
+              : 'METADATA_AVAILABLE'
+            : hit.status === 401 || hit.status === 403
+            ? 'ACCESS_RESTRICTED'
+            : 'SOURCE_UNAVAILABLE',
+          checkedAt: hit.checkedAt ?? nowIso,
+          note: hit.note || `HTTP ${hit.status ?? 'N/A'}`,
+        });
       }
     } catch {
       setLinkStatusMap((prev) => ({
         ...prev,
-        [item.url]: { ok: false, status: null, note: 'Check failed' },
+        [item.url]: { ok: false, status: null, note: 'Check failed', checkedAt: nowIso },
       }));
+      onLogSourceCheck?.({
+        sourceName: item.title,
+        url: item.url,
+        method: 'HTTP HEAD/GET Availability Probe',
+        httpStatus: null,
+        resultingStage: 'SOURCE_UNAVAILABLE',
+        checkedAt: nowIso,
+        note: 'Network failure reaching availability probe endpoint.',
+      });
     }
   };
 
   const handleBatchVerifyVisible = async () => {
     if (batchChecking) return;
-    const targets = filteredDiscovery
+    const targetItems = filteredDiscovery
       .slice(0, 10)
-      .map((d) => d.url)
-      .filter((u) => u.startsWith('https://'));
+      .filter((d) => d.url.startsWith('https://'));
+    const targets = targetItems.map((d) => d.url);
     if (targets.length === 0) return;
 
     setBatchChecking(true);
@@ -321,6 +442,7 @@ export function SourcesReferences({
         results?: Array<{ url: string; ok: boolean; status: number | null; note?: string; checkedAt?: string }>;
       };
       if (resp.ok && data.results) {
+        const nowIso = new Date().toISOString();
         onRecordSourceChecked?.(data.results.length);
         setLinkStatusMap((prev) => {
           const next = { ...prev };
@@ -329,11 +451,29 @@ export function SourcesReferences({
               ok: hit.ok,
               status: hit.status,
               note: hit.note,
-              checkedAt: hit.checkedAt,
+              checkedAt: hit.checkedAt ?? nowIso,
             };
           }
           return next;
         });
+        for (const hit of data.results) {
+          const matched = targetItems.find((t) => t.url === hit.url);
+          onLogSourceCheck?.({
+            sourceName: matched?.title ?? hit.url,
+            url: hit.url,
+            method: 'Batch HTTP Availability Probe',
+            httpStatus: hit.status,
+            resultingStage: hit.ok
+              ? matched?.repository === 'NASA_PSI'
+                ? 'MANUAL_REVIEW_REQUIRED'
+                : 'METADATA_AVAILABLE'
+              : hit.status === 401 || hit.status === 403
+              ? 'ACCESS_RESTRICTED'
+              : 'SOURCE_UNAVAILABLE',
+            checkedAt: hit.checkedAt ?? nowIso,
+            note: hit.note || `HTTP ${hit.status ?? 'N/A'}`,
+          });
+        }
       }
     } finally {
       setBatchChecking(false);
@@ -596,6 +736,18 @@ export function SourcesReferences({
               <option value="PLANNED_NO_PUBLIC_DATA">Planned (No Public Data)</option>
               <option value="TERRESTRIAL_LAB_ONLY">Terrestrial 1g Only</option>
             </Select>
+            <Select
+              value={discStage10}
+              onChange={(e) => setDiscStage10(e.target.value as NasaAvailabilityStage10 | 'ALL')}
+              aria-label="Filter by 10-stage availability"
+            >
+              <option value="ALL">All 10-Stage Statuses ({discovery2Items.length})</option>
+              {(Object.keys(STAGE10_META) as NasaAvailabilityStage10[]).map((st) => (
+                <option key={st} value={st}>
+                  {STAGE10_META[st].label} ({stage10Counts[st]})
+                </option>
+              ))}
+            </Select>
             <Button
               type="button"
               variant="outline"
@@ -608,6 +760,7 @@ export function SourcesReferences({
                 setDiscYear('ALL');
                 setDiscEvidence('ALL');
                 setDiscAvailability('ALL');
+                setDiscStage10('ALL');
               }}
             >
               Reset Discovery Filters
@@ -621,13 +774,22 @@ export function SourcesReferences({
             const isBookmarked = bookmarkedUrlSet.has(item.url);
             const linkCheck = linkStatusMap[item.url];
             const verification = resolveResourceVerificationStatus(item.url, linkCheck);
+            const d2 = discovery2ById.get(item.id);
+            const s10Meta = d2 ? STAGE10_META[d2.stage10] : null;
             return (
               <Card key={item.id} padding="sm" className="space-y-2.5 flex flex-col justify-between">
                 <div className="space-y-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <Badge tone="cyan">{item.repositoryLabel}</Badge>
-                      <Badge tone={verification.tone}>{verification.status}</Badge>
+                      {s10Meta ? (
+                        <Badge tone={s10Meta.tone}>{s10Meta.label}</Badge>
+                      ) : (
+                        <Badge tone={verification.tone}>{verification.status}</Badge>
+                      )}
+                      {d2 && (
+                        <Badge tone="neutral">{d2.detectedFormat}</Badge>
+                      )}
                     </div>
                     <span className="font-mono-tabular text-[var(--text-muted)]">
                       {item.publicationDateDisplay}
@@ -639,6 +801,12 @@ export function SourcesReferences({
                   <p className="text-xs text-[var(--text-secondary)]">
                     {item.investigationShortName} · {item.evidenceType} · {item.researchCategoryLabel}
                   </p>
+                  {d2 && (d2.lastCheckedAt || d2.retrievedAt) && (
+                    <p className="font-mono-tabular text-[10px] text-[var(--text-muted)]">
+                      {d2.lastCheckedAt ? `Checked: ${new Date(d2.lastCheckedAt).toLocaleTimeString()}` : ''}
+                      {d2.retrievedAt ? ` · Retrieved: ${new Date(d2.retrievedAt).toLocaleTimeString()}` : ''}
+                    </p>
+                  )}
                   {isExpanded && (
                     <div className="p-2.5 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1 text-xs text-[var(--text-secondary)]">
                       <p>{item.summary}</p>
@@ -649,7 +817,7 @@ export function SourcesReferences({
                         {item.doi ? ` · DOI ${item.doi}` : ''}
                       </p>
                       <p className="text-[11px] text-[var(--text-muted)]">
-                        Availability: {item.dataAvailabilityLabel} · Verification: {verification.detail}
+                        Availability: {d2?.stage10Detail ?? item.dataAvailabilityLabel} · HTTP Probe: {verification.detail}
                       </p>
                     </div>
                   )}
@@ -1263,6 +1431,106 @@ export function SourcesReferences({
             );
           })}
         </div>
+      </section>
+
+      {/* FLAREX 7.0 Module N: Source Transparency & Acquisition Audit Registry */}
+      <section aria-labelledby="transparency-ledger-heading" className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2
+              id="transparency-ledger-heading"
+              className="font-display text-[20px] font-semibold text-[var(--text-primary)]"
+            >
+              Source Transparency &amp; Check History Ledger
+            </h2>
+            <p className="text-[13px] text-[var(--text-secondary)]">
+              Explicit accounting of retrieval method, live availability stage, metadata vs. raw file status, access restrictions, and session check log.
+            </p>
+          </div>
+          <Badge tone="blue">{transparencyRegistry.length} tracked URLs · {sourceCheckHistory.length} live checks</Badge>
+        </div>
+
+        <div className="overflow-x-auto rounded-[10px] border border-[var(--border-subtle)]">
+          <table className="w-full text-left border-collapse min-w-[820px] text-xs">
+            <thead>
+              <tr className="bg-[var(--bg-secondary)] border-b border-[var(--border-subtle)] text-[11px] uppercase tracking-[0.04em] text-[var(--text-muted)]">
+                <th scope="col" className="p-3">Source Name</th>
+                <th scope="col" className="p-3">Retrieval Method</th>
+                <th scope="col" className="p-3">10-Stage Status</th>
+                <th scope="col" className="p-3">Metadata / File</th>
+                <th scope="col" className="p-3">Access &amp; Limitations</th>
+                <th scope="col" className="p-3">Last Checked</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-subtle)]">
+              {transparencyRegistry.slice(0, 14).map((row) => (
+                <tr key={row.id} className="hover:bg-[var(--bg-elevated)]/30">
+                  <td className="p-3 align-top">
+                    <a
+                      href={row.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-[var(--accent-blue)] hover:underline"
+                    >
+                      {row.sourceName}
+                    </a>
+                    <span className="block text-[11px] text-[var(--text-muted)]">
+                      {row.organization} · {row.resourceType}
+                    </span>
+                  </td>
+                  <td className="p-3 align-top text-[var(--text-secondary)]">{row.retrievalMethod}</td>
+                  <td className="p-3 align-top">
+                    <Badge tone={STAGE10_META[row.availabilityStatus].tone}>
+                      {STAGE10_META[row.availabilityStatus].label}
+                    </Badge>
+                  </td>
+                  <td className="p-3 align-top font-mono-tabular text-[11px] text-[var(--text-secondary)]">
+                    <span className="block">Meta: {row.metadataStatus}</span>
+                    <span className="block">File: {row.fileRetrievalStatus}</span>
+                    <span className="block">Val: {row.validationStatus}</span>
+                  </td>
+                  <td className="p-3 align-top text-[11px] text-[var(--text-secondary)] max-w-[260px]">
+                    {row.accessRestrictions}
+                  </td>
+                  <td className="p-3 align-top font-mono-tabular text-[11px] text-[var(--text-muted)] whitespace-nowrap">
+                    {row.lastCheckedTimestamp
+                      ? new Date(row.lastCheckedTimestamp).toLocaleTimeString()
+                      : 'Not probed'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {sourceCheckHistory.length > 0 && (
+          <Card padding="sm" className="space-y-2">
+            <p className="text-xs font-semibold text-[var(--text-primary)]">
+              Active Session Verification Log ({sourceCheckHistory.length})
+            </p>
+            <ul className="space-y-1.5 max-h-44 overflow-y-auto text-xs">
+              {sourceCheckHistory.slice(0, 15).map((entry) => (
+                <li
+                  key={entry.id}
+                  className="p-2 rounded bg-[var(--bg-secondary)] border border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <span className="font-semibold text-[var(--text-primary)]">{entry.sourceName}</span>{' '}
+                    <span className="text-[var(--text-secondary)]">— {entry.method} ({entry.note})</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 font-mono-tabular text-[11px]">
+                    <Badge tone={STAGE10_META[entry.resultingStage].tone}>
+                      {entry.resultingStage}
+                    </Badge>
+                    <span className="text-[var(--text-muted)]">
+                      {new Date(entry.checkedAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </section>
 
       {/* Dossier Reference Summary Matrix */}

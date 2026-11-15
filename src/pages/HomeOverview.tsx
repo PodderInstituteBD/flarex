@@ -62,6 +62,8 @@ interface HomeOverviewProps {
     generatedReportsCount: number;
     importedDatasetsCount: number;
     analysisRunsCount: number;
+    reproducibilityRunsCount?: number;
+    workspaceCount?: number;
   };
   onOpenEvidenceTab?: (tab: 'catalog' | 'claims' | 'conflicts' | 'audit') => void;
 }
@@ -535,7 +537,9 @@ export function HomeOverview({
               <p className="mt-1.5 text-[24px] font-bold font-mono-tabular text-[var(--text-primary)]">
                 {sessionMetrics.importedDatasetsCount} / {sessionMetrics.analysisRunsCount}
               </p>
-              <p className="mt-1 text-[11px] text-[var(--text-muted)]">Datasets / deterministic runs</p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                {sessionMetrics.reproducibilityRunsCount ?? 0} SHA-256 repro logs
+              </p>
             </button>
 
             <button
@@ -550,6 +554,38 @@ export function HomeOverview({
               <p className="mt-1 text-[11px] text-[var(--text-muted)]">URL checks · Docs · Reports</p>
             </button>
           </div>
+
+          <Card padding="sm" className="bg-[var(--bg-secondary)] flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="cyan">
+                SHA-256 Reproducibility Runs: {sessionMetrics.reproducibilityRunsCount ?? 0}
+              </Badge>
+              <Badge tone="blue">
+                Workspace Saved Items: {sessionMetrics.workspaceCount ?? 0}
+              </Badge>
+              <Badge tone="success">
+                Session Datasets Ready: {evidenceSummary.readinessCheckedCount}
+              </Badge>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => onNavigate('workspace')}
+                className="text-xs font-medium text-[var(--accent-blue)] hover:underline cursor-pointer"
+              >
+                Open Workspace 3.0
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenEvidenceTab ? onOpenEvidenceTab('audit') : onNavigate('evidence')
+                }
+                className="text-xs font-semibold text-[var(--accent-cyan)] hover:underline cursor-pointer"
+              >
+                Inspect 14-Check Audit Center 2.0
+              </button>
+            </div>
+          </Card>
         </section>
       )}
 
