@@ -35,6 +35,8 @@ import {
   filterReferences,
   ReferenceFilterCategory,
 } from '../utils/researchLogic';
+import { runTwelveDataValidationChecks } from '../utils/dataValidation';
+import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
 import {
   LinkCheckState,
   resolveResourceVerificationStatus,
@@ -70,6 +72,10 @@ interface SourcesReferencesProps {
   onToggleBookmark?: (entry: Omit<BookmarkedSourceEntry, 'savedAt'>) => void;
   onAttachNtrsDocument?: (doc: { title: string; sourceUrl: string; content: string }) => void;
   onRecordClientError?: (source: string, message: string) => void;
+  onRecordSourceChecked?: (delta?: number) => void;
+  onRecordRetrievedDocument?: (title: string) => void;
+  ingestedDatasets?: IngestedDatasetPackage[];
+  retrievedDocTitles?: string[];
 }
 
 const REFERENCE_FILTER_TABS: Array<{
@@ -91,6 +97,10 @@ export function SourcesReferences({
   onToggleBookmark,
   onAttachNtrsDocument,
   onRecordClientError,
+  onRecordSourceChecked,
+  onRecordRetrievedDocument,
+  ingestedDatasets = [],
+  retrievedDocTitles = [],
 }: SourcesReferencesProps) {
   const [ntrsQuery, setNtrsQuery] = useState('BASS-II microgravity combustion');
   const [ntrsLoading, setNtrsLoading] = useState(false);
@@ -176,6 +186,7 @@ export function SourcesReferences({
       setNtrsTextStatus(
         `File successfully retrieved: NTRS ${id} (${((data.byteLength ?? data.content.length) / 1024).toFixed(1)} KB .txt). Sending to AI Mode B...`
       );
+      onRecordRetrievedDocument?.(`${title} (NTRS ${id})`);
       onAttachNtrsDocument?.({
         title: `${title} (NTRS ${id})`,
         sourceUrl: data.sourceUrl ?? `https://ntrs.nasa.gov/citations/${id}`,
@@ -272,6 +283,7 @@ export function SourcesReferences({
       };
       const hit = data.results?.[0];
       if (hit) {
+        onRecordSourceChecked?.(1);
         setLinkStatusMap((prev) => ({
           ...prev,
           [item.url]: {
@@ -309,6 +321,7 @@ export function SourcesReferences({
         results?: Array<{ url: string; ok: boolean; status: number | null; note?: string; checkedAt?: string }>;
       };
       if (resp.ok && data.results) {
+        onRecordSourceChecked?.(data.results.length);
         setLinkStatusMap((prev) => {
           const next = { ...prev };
           for (const hit of data.results ?? []) {
@@ -326,6 +339,33 @@ export function SourcesReferences({
       setBatchChecking(false);
     }
   };
+
+  const acquisitionStages = useMemo(() => {
+    const publicationsCount = discoveryIndex.filter(
+      (d) =>
+        d.repository === 'NASA_NTRS' ||
+        d.repository === 'PEER_REVIEWED_JOURNAL' ||
+        d.repository === 'LOCAL_DOSSIER'
+    ).length;
+    const metadataCount =
+      investigations.length + (ntrsResults?.length ?? 0) + (osdrData?.results.length ?? 0);
+    const datasetReferencedCount = investigations.filter((r) => Boolean(r.psiId)).length;
+    const downloadableDirectCount =
+      (psiBrowseData?.objects.length ?? 0) + retrievedDocTitles.length + 2; // 2 verified NTRS ASCII public manuscripts
+    const importedCount = ingestedDatasets.length;
+    const validatedCount = ingestedDatasets.filter((ds) => {
+      const checks = runTwelveDataValidationChecks(ds);
+      return checks.checks.every((c) => c.status !== 'FAIL');
+    }).length;
+    return [
+      { stage: '1. Publication available', count: `${publicationsCount} indexed`, ready: publicationsCount > 0 },
+      { stage: '2. Metadata available', count: `${metadataCount} records`, ready: metadataCount > 0 },
+      { stage: '3. Dataset referenced', count: `${datasetReferencedCount} PSI IDs`, ready: datasetReferencedCount > 0 },
+      { stage: '4. Dataset downloadable', count: `${downloadableDirectCount} direct NTRS/S3`, ready: downloadableDirectCount > 0 },
+      { stage: '5. Dataset successfully imported', count: `${importedCount} in session`, ready: importedCount > 0 },
+      { stage: '6. Dataset validated', count: `${validatedCount}/${importedCount || 0} passed`, ready: validatedCount > 0 },
+    ];
+  }, [discoveryIndex, investigations, ntrsResults, osdrData, psiBrowseData, retrievedDocTitles, ingestedDatasets]);
 
   const allReferenceItems = useMemo(
     () => buildReferenceLibrary(investigations),
@@ -404,6 +444,42 @@ export function SourcesReferences({
           </div>
         }
       />
+
+      {/* FLAREX 6.0 Module H: 6-Stage Publication & Dataset Acquisition Tracker */}
+      <Card padding="sm" className="space-y-3 bg-[var(--bg-secondary)]">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--accent-cyan)]">
+              NASA Publication &amp; Dataset Availability Pipeline (6 Explicit Stages)
+            </h2>
+            <p className="text-[11px] text-[var(--text-secondary)]">
+              Distinguishes public full-text NTRS/S3 files from gated NASA PSI experiment downloads requiring browser authentication.
+            </p>
+          </div>
+          {retrievedDocTitles.length > 0 && (
+            <Badge tone="success">{retrievedDocTitles.length} doc(s) retrieved in session</Badge>
+          )}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          {acquisitionStages.map((s) => (
+            <div
+              key={s.stage}
+              className="p-2.5 rounded-[8px] bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-1"
+            >
+              <p className="text-[11px] font-semibold text-[var(--text-primary)] leading-tight">
+                {s.stage}
+              </p>
+              <Badge tone={s.ready ? 'success' : 'neutral'}>{s.count}</Badge>
+            </div>
+          ))}
+        </div>
+        {retrievedDocTitles.length > 0 && (
+          <p className="text-[11px] text-[var(--text-secondary)]">
+            <strong className="text-[var(--text-primary)]">Retrieved in active session:</strong>{' '}
+            {retrievedDocTitles.join(' · ')}
+          </p>
+        )}
+      </Card>
 
       {/* Module 1: Advanced NASA Research Discovery Engine */}
       <section aria-labelledby="discovery-engine-heading" className="space-y-4">

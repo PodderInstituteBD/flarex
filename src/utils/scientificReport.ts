@@ -251,3 +251,301 @@ export function renderScientificReportCsv(pkg: ScientificReportPackage): string 
   ];
   return rows.map((r) => r.map(escape).join(',')).join('\n');
 }
+
+export interface ReportV2ExtendedInput {
+  investigations: InvestigationRecord[];
+  gaps: ResearchGapRecord[];
+  ingestedDatasets: IngestedDatasetPackage[];
+  analysisRuns: ReproducibleAnalysisRun[];
+  researchQuestion?: string;
+  aiInterpretationNote?: string;
+  generatedAt?: string;
+}
+
+/**
+ * FLAREX 6.0 Module I — Type A: Investigation Research Report (9 exact sections)
+ */
+export function buildInvestigationResearchReportV2(
+  input: ReportV2ExtendedInput
+): ScientificReportPackage {
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const selected = input.investigations;
+  const conditionMatrix =
+    selected.length >= 2 ? analyzeExperimentalConditions(selected) : null;
+
+  const s1 =
+    selected.length === 0
+      ? 'No investigations selected.'
+      : [
+          input.researchQuestion?.trim()
+            ? `**Research Focus:** ${input.researchQuestion.trim()}\n`
+            : '',
+          ...selected.map(
+            (r) =>
+              `- **${r.shortName}** (${r.name}) | Family: ${r.family} | Timeframe: ${r.timeframe} | Overview: ${r.overview}`
+          ),
+        ]
+          .filter(Boolean)
+          .join('\n');
+
+  const s2 =
+    selected.length === 0
+      ? 'No experimental setup metadata selected.'
+      : selected
+          .map(
+            (r) =>
+              `- **${r.shortName}**: Platform=${r.platform}; Gravity=${r.gravityContext} (${
+                r.isMicrogravity ? '0g' : '1g Terrestrial'
+              }); Fuels=${r.fuels.join(', ')}; Variables=${r.environmentalVariables.join(
+                ', '
+              )}; Sensors=${r.sensors.join(', ')}`
+          )
+          .join('\n');
+
+  const s3 =
+    selected.length === 0
+      ? 'No source provenance records.'
+      : selected
+          .map(
+            (r) =>
+              `- **${r.shortName}**: [${r.sourceLabel}](${r.sourceUrl}) · Classification=${
+                r.evidenceType
+              }${r.psiId ? ` · PSI=${r.psiId}` : ''}${
+                r.ntrsDocumentId ? ` · NTRS=${r.ntrsDocumentId}` : ''
+              }${r.doi ? ` · DOI=${r.doi}` : ''} · Availability=${r.dataAvailabilityLabel}`
+          )
+          .join('\n');
+
+  const s4 =
+    selected.length === 0
+      ? 'No evidence summary available.'
+      : selected
+          .map((r) => {
+            const qCount = r.quantitativeData.length;
+            return `- **${r.shortName}**: ${r.evidenceType} (${
+              r.isPlannedOrOngoing
+                ? 'Pending Flight Release / Planned'
+                : r.isMicrogravity
+                ? 'Documented Spaceflight Record'
+                : '1g Terrestrial Baseline'
+            }) · ${qCount} quantitative dossier entry(s) · ${r.sensors.length} sensor(s)`;
+          })
+          .join('\n');
+
+  const s5 =
+    selected.length === 0
+      ? 'No published findings available.'
+      : selected
+          .map(
+            (r) =>
+              `- **${r.shortName}**: ${
+                r.reportedFindings ??
+                'No completed flight experimental findings published in reviewed source yet.'
+              }`
+          )
+          .join('\n');
+
+  const s6 = conditionMatrix
+    ? [
+        `- **Overall Experimental Comparability:** ${conditionMatrix.overallStatus}`,
+        `- **Guidance:** ${conditionMatrix.guidanceNote}`,
+        ...conditionMatrix.dimensions.map(
+          (d) => `- **${d.dimension}** (${d.status}): ${d.summary}`
+        ),
+      ].join('\n')
+    : 'Select at least 2 investigations to generate cross-study experimental comparison notes.';
+
+  const selectedIds = new Set(selected.map((r) => r.id));
+  const matchingGaps = input.gaps.filter((g) =>
+    g.relatedInvestigationIds.some((id) => selectedIds.has(id))
+  );
+  const s7Lines: string[] = [];
+  for (const r of selected) {
+    for (const lim of r.limitations) {
+      s7Lines.push(`- **${r.shortName} Limitation:** ${lim}`);
+    }
+  }
+  for (const g of matchingGaps.slice(0, 6)) {
+    s7Lines.push(
+      `- **Potential Gap (${g.area} — ${g.evidenceStrength}):** ${g.title} — ${g.description}`
+    );
+  }
+  const s7 = s7Lines.join('\n') || 'No additional limitations recorded.';
+
+  const s8 = input.aiInterpretationNote?.trim()
+    ? `${input.aiInterpretationNote.trim()}\n\n_(Note: AI commentary is strictly non-experimental and does not alter source facts.)_`
+    : 'No AI interpretation note attached to this report. All sections above are strictly extracted from verified dossier sources.';
+
+  const s9Lines: string[] = [];
+  for (const r of selected) {
+    s9Lines.push(`1. ${r.sourceLabel} — ${r.sourceUrl}`);
+    if (r.publications) {
+      for (const p of r.publications) {
+        s9Lines.push(`   - ${p.title} (*${p.journal}*, ${p.date}) — DOI: ${p.doi}`);
+      }
+    }
+  }
+  const s9 = s9Lines.join('\n') || 'None.';
+
+  return {
+    generatedAt,
+    title: 'FLAREX 6.0 Type A — Investigation Research Report',
+    sections: [
+      { number: 1, heading: '1. Investigation overview', layer: 'SOURCE_FACT', content: s1 },
+      { number: 2, heading: '2. Experimental setup and environment', layer: 'SOURCE_FACT', content: s2 },
+      { number: 3, heading: '3. Source citations and provenance', layer: 'SOURCE_FACT', content: s3 },
+      { number: 4, heading: '4. Evidence summary', layer: 'SOURCE_FACT', content: s4 },
+      { number: 5, heading: '5. Key published findings', layer: 'SOURCE_FACT', content: s5 },
+      { number: 6, heading: '6. Comparison notes', layer: 'METHODOLOGY', content: s6 },
+      { number: 7, heading: '7. Research gaps and limitations', layer: 'SOURCE_FACT', content: s7 },
+      { number: 8, heading: '8. AI interpretation (clearly separated)', layer: 'AI_INTERPRETATION', content: s8 },
+      { number: 9, heading: '9. References', layer: 'SOURCE_FACT', content: s9 },
+    ],
+  };
+}
+
+/**
+ * FLAREX 6.0 Module I — Type B: Numerical Data Analysis Report (9 exact sections)
+ */
+export function buildNumericalAnalysisReportV2(
+  input: ReportV2ExtendedInput
+): ScientificReportPackage {
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const dsList = input.ingestedDatasets;
+  const runs = input.analysisRuns;
+
+  const s1 =
+    dsList.length === 0
+      ? 'No raw tabular dataset imported in the active session. Built-in dossier records contain metadata and published range summaries only.'
+      : dsList
+          .map(
+            (ds) =>
+              `- **File:** ${ds.provenance.originalFilename} (${ds.provenance.format}) · **Repository:** ${ds.provenance.repository} · **Origin:** ${ds.provenance.sourceUrl} · **Retrieved At:** ${ds.provenance.retrievalDate}`
+          )
+          .join('\n');
+
+  const s2 =
+    dsList.length === 0
+      ? 'Validation not executed: no local dataset imported yet.'
+      : dsList
+          .map(
+            (ds) =>
+              `- **${ds.provenance.originalFilename}**: Import status=${ds.provenance.importStatus}; Warnings=${
+                ds.summary.warnings.length > 0 ? ds.summary.warnings.join('; ') : 'None'
+              }; Errors=${ds.summary.errors.length > 0 ? ds.summary.errors.join('; ') : 'None'}`
+          )
+          .join('\n');
+
+  const s3 =
+    dsList.length === 0
+      ? 'No tabular column schema detected.'
+      : dsList
+          .map(
+            (ds) =>
+              `### ${ds.provenance.originalFilename}\n` +
+              ds.columns
+                .map(
+                  (c) =>
+                    `- \`${c.originalName}\` (normalized: \`${c.normalizedName}\`): type=${
+                      c.inferredType
+                    }, unit=${c.detectedUnit ?? 'unspecified'}, validNumeric=${
+                      c.validNumericCount
+                    }`
+                )
+                .join('\n')
+          )
+          .join('\n\n');
+
+  const s4 =
+    dsList.length === 0
+      ? 'Missing-value and duplicate checks await dataset import.'
+      : dsList
+          .map(
+            (ds) =>
+              `- **${ds.provenance.originalFilename}**: ${ds.summary.rowCount} rows × ${ds.summary.columnCount} cols · Missing cells=${ds.summary.totalMissingCells} (${ds.summary.missingPctOverall}%, mapped to null — never 0) · Invalid numeric=${ds.summary.totalInvalidNumericCells} · Duplicate rows=${ds.summary.duplicateRowCount}`
+          )
+          .join('\n');
+
+  const s5 =
+    runs.length === 0
+      ? 'No statistical calculations executed yet in the active Numerical Workbench session.'
+      : runs
+          .map((run) => {
+            if (run.descriptive) {
+              const d = run.descriptive;
+              return `- **Descriptive (${d.variable}${d.unit ? ` [${d.unit}]` : ''}):** n=${d.sampleCount}, mean=${d.mean}, median=${d.median}, min=${d.min}, max=${d.max}, sampleSD(n-1)=${d.stdDev ?? 'N/A (n<2)'}`;
+            }
+            if (run.correlation) {
+              return `- **Pearson Correlation (${run.correlation.xVariable} vs ${run.correlation.yVariable}):** r=${run.correlation.pearsonR} (pairs=${run.correlation.pairCount}; ${run.correlation.interpretationNote})`;
+            }
+            if (run.timeSeriesSummary) {
+              const t = run.timeSeriesSummary;
+              return `- **Sequence Summary (${t.timeVariable} → ${t.valueVariable}):** start=${t.startValue}, end=${t.endValue}, netDelta=${t.netDelta}, peak=${t.peakValue}, trough=${t.troughValue}`;
+            }
+            return `- **Run ${run.runId}:** ${run.errorMessage ?? run.calculationMethodLabel}`;
+          })
+          .join('\n');
+
+  const s6 =
+    runs.length === 0
+      ? 'No generated dataset histograms, scatter plots, or time-series trajectories yet.'
+      : runs
+          .map((run) => {
+            if (run.histogram?.length) {
+              return `- **Histogram (${run.inputVariables[0]}):** ${run.histogram
+                .map((b) => `[${b.binLabel}]: ${b.count}`)
+                .join(', ')}`;
+            }
+            if (run.correlation) {
+              return `- **Scatter Plot:** ${run.correlation.xVariable} vs ${run.correlation.yVariable} (${run.correlation.pairCount} valid pairs)`;
+            }
+            if (run.timeSeriesSummary) {
+              return `- **Sequence Trajectory:** ${run.timeSeriesSummary.pointCount} ordered points`;
+            }
+            return `- **Run ${run.runId}:** No chart data emitted.`;
+          })
+          .join('\n');
+
+  const s7 =
+    runs.length === 0
+      ? 'No reproducibility ledger entries recorded yet.'
+      : runs
+          .map(
+            (run) =>
+              `- **Run \`${run.runId}\`**: method=${run.method}, version=${run.softwareVersion}, dataset=\`${run.datasetFilename}\` (${run.sourceVersion}), vars=[${run.inputVariables.join(', ')}], n=${run.sampleCount}, missingHandling="${run.missingDataHandling}", timestamp=${run.timestamp}`
+          )
+          .join('\n');
+
+  const s8Lines: string[] = [
+    '- Missing and invalid tokens are preserved as `null` (never coerced to `0`).',
+    '- Pearson correlation measures linear co-variation only and never establishes physical causality.',
+    '- Potential IQR outliers are flagged non-destructively and never auto-deleted.',
+  ];
+  for (const run of runs) {
+    for (const lim of run.limitations) {
+      s8Lines.push(`- **${run.runId}:** ${lim}`);
+    }
+  }
+  const s8 = Array.from(new Set(s8Lines)).join('\n');
+
+  const s9 = input.aiInterpretationNote?.trim()
+    ? `${input.aiInterpretationNote.trim()}\n\n_(AI interpretation only; computed statistics above remain deterministic.)_`
+    : 'No AI interpretation note attached. All calculations above are deterministic mathematical summaries of imported tabular values.';
+
+  return {
+    generatedAt,
+    title: 'FLAREX 6.0 Type B — Numerical Data Analysis Report',
+    sections: [
+      { number: 1, heading: '1. Dataset provenance and origin', layer: 'SOURCE_FACT', content: s1 },
+      { number: 2, heading: '2. Validation summary', layer: 'METHODOLOGY', content: s2 },
+      { number: 3, heading: '3. Variable schema and units', layer: 'SOURCE_FACT', content: s3 },
+      { number: 4, heading: '4. Missing data and quality diagnostics', layer: 'METHODOLOGY', content: s4 },
+      { number: 5, heading: '5. Statistical calculations', layer: 'DERIVED_STATISTICS', content: s5 },
+      { number: 6, heading: '6. Visualization summary', layer: 'DERIVED_STATISTICS', content: s6 },
+      { number: 7, heading: '7. Reproducibility parameters', layer: 'METHODOLOGY', content: s7 },
+      { number: 8, heading: '8. Limitations and cautions', layer: 'METHODOLOGY', content: s8 },
+      { number: 9, heading: '9. AI interpretation (clearly separated)', layer: 'AI_INTERPRETATION', content: s9 },
+    ],
+  };
+}
+

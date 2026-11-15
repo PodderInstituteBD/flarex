@@ -1,5 +1,7 @@
-import type { InvestigationRecord } from '../types/research.ts';
+import type { InvestigationRecord, ResearchGapRecord } from '../types/research.ts';
+import type { VerifiedScientificClaim } from './claimVerification.ts';
 import { computeCategoryBreakdown } from './researchLogic.ts';
+import type { IngestedDatasetPackage } from './scientificIngestion.ts';
 
 export type KnowledgeNodeType =
   | 'INVESTIGATION'
@@ -11,7 +13,11 @@ export type KnowledgeNodeType =
   | 'METHOD'
   | 'FINDING'
   | 'TOPIC'
-  | 'LIMITATION';
+  | 'LIMITATION'
+  | 'CLAIM'
+  | 'CONDITION'
+  | 'DATASET'
+  | 'RESEARCH_GAP';
 
 export type EdgeVerificationStatus = 'VERIFIED' | 'INFERRED';
 
@@ -57,6 +63,10 @@ export const NODE_TYPE_META: Record<
   FINDING: { label: 'Documented Finding', color: '#34D399' },
   TOPIC: { label: 'Research Topic', color: '#60A5FA' },
   LIMITATION: { label: 'Research Limitation', color: '#F16B79' },
+  CLAIM: { label: 'Verified Claim', color: '#22D3EE' },
+  CONDITION: { label: 'Experimental Condition', color: '#10B981' },
+  DATASET: { label: 'Tabular Dataset', color: '#F59E0B' },
+  RESEARCH_GAP: { label: 'Research Gap', color: '#FB7185' },
 };
 
 function slugifyId(prefix: string, raw: string): string {
@@ -84,6 +94,9 @@ export function buildKnowledgeGraph(
   options?: {
     focusInvestigationId?: string | 'ALL';
     includeInferred?: boolean;
+    gaps?: ResearchGapRecord[];
+    claims?: VerifiedScientificClaim[];
+    ingestedDatasets?: IngestedDatasetPackage[];
   }
 ): KnowledgeGraphData {
   const focusId = options?.focusInvestigationId ?? 'ALL';
@@ -269,6 +282,37 @@ export function buildKnowledgeGraph(
       );
       addEdge(primaryPubId, findId, 'SUPPORTS_FINDING', 'VERIFIED', rec.sourceLabel);
       addEdge(invNodeId, findId, 'SUPPORTS_FINDING', 'VERIFIED', rec.sourceLabel);
+      addEdge(findId, primaryPubId, 'DERIVED_FROM', 'VERIFIED', rec.sourceLabel);
+    }
+
+    // Experimental Condition node (FLAREX 6.0 Module G)
+    const condLabel = rec.isMicrogravity
+      ? '0g Microgravity Environment'
+      : '1g Terrestrial Environment';
+    const condNodeId = slugifyId('cond', condLabel);
+    ensureNode(
+      condNodeId,
+      condLabel,
+      'CONDITION',
+      rec.id,
+      rec.sourceUrl,
+      `${rec.gravityContext} · ${rec.environmentalVariables.slice(0, 3).join(', ')}`
+    );
+    addEdge(invNodeId, condNodeId, 'HAS_EXPERIMENTAL_CONDITION', 'VERIFIED', rec.sourceLabel);
+
+    // Dataset Reference node when PSI dataset ID is indexed
+    if (rec.psiId && focusId !== 'ALL') {
+      const dsRefId = `dataset:psi-${rec.psiId}`;
+      ensureNode(
+        dsRefId,
+        `PSI-${rec.psiId}`,
+        'DATASET',
+        rec.id,
+        rec.sourceUrl,
+        `NASA PSI Repository ID ${rec.psiId} (${rec.dataAvailabilityLabel})`
+      );
+      addEdge(invNodeId, dsRefId, 'HAS_DATASET', 'VERIFIED', rec.sourceLabel);
+      addEdge(dsRefId, primaryPubId, 'DERIVED_FROM', 'VERIFIED', rec.sourceLabel);
     }
 
     // Limitations (focused view)
@@ -288,7 +332,102 @@ export function buildKnowledgeGraph(
     }
   }
 
-  // Explicitly marked INFERRED relationships: shared domain or fuel analogs across records
+  // Optional FLAREX 6.0 Research Gap links (HAS_RESEARCH_GAP)
+  if (options?.gaps && options.gaps.length > 0) {
+    for (const gap of options.gaps) {
+      const matchingInvIds = gap.relatedInvestigationIds.filter((id) =>
+        nodeMap.has(`inv:${id}`)
+      );
+      if (matchingInvIds.length === 0) continue;
+      const gapNodeId = `gap:${gap.id}`;
+      ensureNode(
+        gapNodeId,
+        gap.title.slice(0, 38) + (gap.title.length > 38 ? '…' : ''),
+        'RESEARCH_GAP',
+        matchingInvIds[0],
+        gap.supportingSources[0] ?? 'https://psi.nasa.gov/',
+        `${gap.area} (${gap.evidenceStrength}): ${gap.description}`
+      );
+      for (const invId of matchingInvIds) {
+        addEdge(
+          `inv:${invId}`,
+          gapNodeId,
+          'HAS_RESEARCH_GAP',
+          gap.isAiSynthesis ? 'INFERRED' : 'VERIFIED',
+          gap.supportingSources.join(', ')
+        );
+      }
+    }
+  }
+
+  // Optional FLAREX 6.0 Verified Claims (SUPPORTS_CLAIM, CONTRADICTS_CLAIM, DERIVED_FROM)
+  if (options?.claims && options.claims.length > 0) {
+    const activeClaims =
+      focusId === 'ALL' ? options.claims.slice(0, 8) : options.claims;
+    for (const claim of activeClaims) {
+      const matchingSrcs = claim.supportingSources.filter((s) =>
+        nodeMap.has(`inv:${s.investigationId}`)
+      );
+      if (matchingSrcs.length === 0) continue;
+      const claimNodeId = `claim:${claim.claimId}`;
+      ensureNode(
+        claimNodeId,
+        claim.claimText.slice(0, 40) + (claim.claimText.length > 40 ? '…' : ''),
+        'CLAIM',
+        matchingSrcs[0].investigationId,
+        matchingSrcs[0].sourceUrl,
+        `Status: ${claim.verificationStatus} · ${claim.explanation}`
+      );
+      const predicate =
+        claim.verificationStatus === 'Conflicting evidence'
+          ? 'CONTRADICTS_CLAIM'
+          : 'SUPPORTS_CLAIM';
+      for (const src of matchingSrcs) {
+        addEdge(
+          `inv:${src.investigationId}`,
+          claimNodeId,
+          predicate,
+          claim.verificationStatus === 'AI interpretation only' ? 'INFERRED' : 'VERIFIED',
+          src.sourceLabel
+        );
+        addEdge(
+          claimNodeId,
+          `inv:${src.investigationId}`,
+          'DERIVED_FROM',
+          'VERIFIED',
+          src.sourceId
+        );
+      }
+    }
+  }
+
+  // Optional FLAREX 6.0 User-Imported Tabular Datasets (HAS_DATASET, DERIVED_FROM)
+  if (options?.ingestedDatasets && options.ingestedDatasets.length > 0) {
+    for (const ds of options.ingestedDatasets) {
+      const targetInvId =
+        targetRecords[0]?.id ?? investigations[0]?.id ?? 'custom';
+      const dsId = `dataset:${ds.provenance.datasetId}`;
+      ensureNode(
+        dsId,
+        ds.provenance.originalFilename,
+        'DATASET',
+        targetInvId,
+        ds.provenance.sourceUrl,
+        `${ds.summary.rowCount} rows × ${ds.summary.columnCount} cols (${ds.provenance.repository})`
+      );
+      if (nodeMap.has(`inv:${targetInvId}`)) {
+        addEdge(
+          `inv:${targetInvId}`,
+          dsId,
+          'HAS_DATASET',
+          'INFERRED',
+          ds.provenance.repository
+        );
+      }
+    }
+  }
+
+  // Explicitly marked INFERRED relationships: shared domain or cross-study comparisons
   if (includeInferred && focusId === 'ALL') {
     const invNodes = Array.from(nodeMap.values()).filter(
       (n) => n.type === 'INVESTIGATION'
@@ -308,6 +447,13 @@ export function buildKnowledgeGraph(
             'RELATED_TO',
             'INFERRED',
             `Inferred shared dossier family: ${a.family}`
+          );
+          addEdge(
+            invNodes[i].id,
+            invNodes[j].id,
+            'COMPARED_WITH',
+            'INFERRED',
+            `Comparable ${a.gravityContext} regime within ${a.family}`
           );
         }
       }

@@ -23,12 +23,14 @@ import {
 import type { ReproducibleAnalysisRun } from '../utils/scientificAnalysis';
 import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
 import {
+  buildInvestigationResearchReportV2,
+  buildNumericalAnalysisReportV2,
   buildScientificReportPackage,
   renderScientificReportCsv,
   renderScientificReportJson,
   renderScientificReportMarkdown,
 } from '../utils/scientificReport';
-import { ResearchWorkspaceState } from '../utils/workspaceStore';
+import { ResearchWorkspaceState, SavedReportEntry } from '../utils/workspaceStore';
 
 interface ExportCenterProps {
   investigations: InvestigationRecord[];
@@ -37,6 +39,8 @@ interface ExportCenterProps {
   initialReportType?: ExportReportType;
   ingestedDatasets?: IngestedDatasetPackage[];
   analysisHistory?: ReproducibleAnalysisRun[];
+  onSaveReport?: (report: Omit<SavedReportEntry, 'id' | 'createdAt'>) => void;
+  onReportDownloaded?: () => void;
 }
 
 const REPORT_OPTIONS: Array<{
@@ -44,6 +48,18 @@ const REPORT_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
+  {
+    id: 'investigation_report_v2',
+    label: 'Type A: FLAREX 6.0 Investigation Research Report (9 Sections)',
+    description:
+      'Investigation overview, experimental setup, provenance citations, evidence summary, findings, 12-dimension comparison notes, gaps/limitations, separated AI section, and references.',
+  },
+  {
+    id: 'numerical_analysis_report_v2',
+    label: 'Type B: FLAREX 6.0 Numerical Data Analysis Report (9 Sections)',
+    description:
+      'Dataset provenance, 12-check validation summary, schema & units, missing-data diagnostics, deterministic stats, chart summaries, reproducibility ledger, limitations, and separated AI notes.',
+  },
   {
     id: 'scientific_full_report',
     label: 'FLAREX 5.0 Scientific Investigation Report (9 Sections)',
@@ -103,9 +119,11 @@ export function ExportCenter({
   investigations,
   compareIds,
   workspace,
-  initialReportType = 'scientific_full_report',
+  initialReportType = 'investigation_report_v2',
   ingestedDatasets = [],
   analysisHistory = [],
+  onSaveReport,
+  onReportDownloaded,
 }: ExportCenterProps) {
   const [reportType, setReportType] = useState<ExportReportType>(initialReportType);
   const [previewFormat, setPreviewFormat] = useState<'csv' | 'json' | 'markdown'>(
@@ -126,18 +144,41 @@ export function ExportCenter({
     return matched.length > 0 ? matched : investigations.slice(0, 3);
   }, [investigations, compareIds]);
 
-  const scientificFullPackage = useMemo(
-    () =>
-      buildScientificReportPackage({
-        researchQuestion,
-        selectedInvestigations,
+  const structuredReportPackage = useMemo(() => {
+    if (reportType === 'investigation_report_v2') {
+      return buildInvestigationResearchReportV2({
+        investigations: selectedInvestigations,
+        gaps: RESEARCH_GAPS,
         ingestedDatasets,
         analysisRuns: analysisHistory,
-        gaps: RESEARCH_GAPS,
+        researchQuestion,
         aiInterpretationNote: aiNote,
-      }),
-    [researchQuestion, selectedInvestigations, ingestedDatasets, analysisHistory, aiNote]
-  );
+      });
+    }
+    if (reportType === 'numerical_analysis_report_v2') {
+      return buildNumericalAnalysisReportV2({
+        investigations: selectedInvestigations,
+        gaps: RESEARCH_GAPS,
+        ingestedDatasets,
+        analysisRuns: analysisHistory,
+        researchQuestion,
+        aiInterpretationNote: aiNote,
+      });
+    }
+    return buildScientificReportPackage({
+      researchQuestion,
+      selectedInvestigations,
+      ingestedDatasets,
+      analysisRuns: analysisHistory,
+      gaps: RESEARCH_GAPS,
+      aiInterpretationNote: aiNote,
+    });
+  }, [reportType, researchQuestion, selectedInvestigations, ingestedDatasets, analysisHistory, aiNote]);
+
+  const isNineSectionReport =
+    reportType === 'investigation_report_v2' ||
+    reportType === 'numerical_analysis_report_v2' ||
+    reportType === 'scientific_full_report';
 
   const bundleInput = useMemo(
     () => ({
@@ -154,24 +195,24 @@ export function ExportCenter({
 
   const csvContent = useMemo(
     () =>
-      reportType === 'scientific_full_report'
-        ? renderScientificReportCsv(scientificFullPackage)
+      isNineSectionReport
+        ? renderScientificReportCsv(structuredReportPackage)
         : generateExportCsv(bundleInput),
-    [reportType, scientificFullPackage, bundleInput]
+    [isNineSectionReport, structuredReportPackage, bundleInput]
   );
   const jsonContent = useMemo(
     () =>
-      reportType === 'scientific_full_report'
-        ? renderScientificReportJson(scientificFullPackage)
+      isNineSectionReport
+        ? renderScientificReportJson(structuredReportPackage)
         : generateExportJson(bundleInput),
-    [reportType, scientificFullPackage, bundleInput]
+    [isNineSectionReport, structuredReportPackage, bundleInput]
   );
   const mdContent = useMemo(
     () =>
-      reportType === 'scientific_full_report'
-        ? renderScientificReportMarkdown(scientificFullPackage)
+      isNineSectionReport
+        ? renderScientificReportMarkdown(structuredReportPackage)
         : generateExportMarkdown(bundleInput),
-    [reportType, scientificFullPackage, bundleInput]
+    [isNineSectionReport, structuredReportPackage, bundleInput]
   );
 
   const activePreview =
@@ -249,7 +290,7 @@ export function ExportCenter({
             />
           </div>
 
-          {reportType === 'scientific_full_report' && (
+          {(reportType === 'scientific_full_report' || reportType === 'investigation_report_v2') && (
             <div className="lg:col-span-12 space-y-1.5">
               <label
                 htmlFor="export-research-question"
@@ -273,9 +314,10 @@ export function ExportCenter({
             <Button
               variant="primary"
               size="sm"
-              onClick={() =>
-                triggerFileDownload(csvContent, `${baseFileSlug}.csv`, 'text/csv;charset=utf-8')
-              }
+              onClick={() => {
+                triggerFileDownload(csvContent, `${baseFileSlug}.csv`, 'text/csv;charset=utf-8');
+                onReportDownloaded?.();
+              }}
             >
               <FileSpreadsheet className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Download CSV</span>
@@ -283,13 +325,14 @@ export function ExportCenter({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() =>
+              onClick={() => {
                 triggerFileDownload(
                   jsonContent,
                   `${baseFileSlug}.json`,
                   'application/json;charset=utf-8'
-                )
-              }
+                );
+                onReportDownloaded?.();
+              }}
             >
               <FileCode className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Download JSON</span>
@@ -297,17 +340,35 @@ export function ExportCenter({
             <Button
               variant="secondary"
               size="sm"
-              onClick={() =>
+              onClick={() => {
                 triggerFileDownload(
                   mdContent,
                   `${baseFileSlug}.md`,
                   'text/markdown;charset=utf-8'
-                )
-              }
+                );
+                onReportDownloaded?.();
+              }}
             >
               <FileText className="w-3.5 h-3.5" aria-hidden="true" />
               <span>Download Markdown</span>
             </Button>
+            {onSaveReport && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  onSaveReport({
+                    title:
+                      REPORT_OPTIONS.find((o) => o.id === reportType)?.label ??
+                      'FLAREX Scientific Report',
+                    reportType,
+                    markdown: mdContent,
+                  })
+                }
+              >
+                <span>Save Report to Workspace</span>
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

@@ -4,9 +4,11 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  Download,
   ExternalLink,
   FileCheck2,
   FileText,
+  FolderPlus,
   MessageSquareText,
   RotateCcw,
   Send,
@@ -24,6 +26,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { ErrorState, LoadingSkeleton, NoticeBanner } from '../components/ui/States';
 import { InvestigationRecord } from '../types/research';
 import type { AiAnswerMode } from '../utils/aiReliability';
+import type { AiInterpretationInput } from '../utils/evidenceIntelligence';
 import {
   buildRetrievedSourceRefs,
   CitationValidationSummary,
@@ -33,6 +36,11 @@ import {
   runAdvancedRagRetrieval,
   validateCitations,
 } from '../utils/ragPipeline';
+import {
+  detectScientificConflicts,
+  ScientificConflictRecord,
+} from '../utils/scientificUncertainty';
+import type { SavedResearchBriefEntry } from '../utils/workspaceStore';
 
 type AnalysisMode = 'concept' | 'comparison' | 'evidence' | 'outline';
 
@@ -40,11 +48,13 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'error';
   text: string;
+  question?: string;
   model?: string;
   answerMode?: AiAnswerMode;
   latencyMs?: number;
   classification?: RagQueryClassification;
   sources?: RetrievedSourceCitation[];
+  conflicts?: ScientificConflictRecord[];
   diagnostics?: RagRetrievalDiagnostics;
   citationValidation?: CitationValidationSummary;
   retryPrompt?: string;
@@ -59,6 +69,8 @@ interface AiAssistantProps {
   attachedDocument?: ActiveAiDocumentContext | null;
   onClearAttachedDocument?: () => void;
   onRecordClientError?: (source: string, message: string) => void;
+  onSaveBrief?: (brief: Omit<SavedResearchBriefEntry, 'id' | 'createdAt'>) => void;
+  onRecordAiInterpretation?: (item: AiInterpretationInput) => void;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -79,6 +91,8 @@ export function AiAssistant({
   attachedDocument = null,
   onClearAttachedDocument,
   onRecordClientError,
+  onSaveBrief,
+  onRecordAiInterpretation,
 }: AiAssistantProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -91,6 +105,7 @@ export function AiAssistant({
   );
   const [expandedDiagnosticsId, setExpandedDiagnosticsId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedBriefIds, setSavedBriefIds] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [healthInfo, setHealthInfo] = useState<{
@@ -136,6 +151,13 @@ export function AiAssistant({
     };
   }, []);
 
+  const findRelevantConflicts = (recs: InvestigationRecord[]): ScientificConflictRecord[] => {
+    const shortNames = new Set(recs.map((r) => r.shortName));
+    return detectScientificConflicts({ investigations }).filter(
+      (c) => shortNames.has(c.investigationA) || shortNames.has(c.investigationB)
+    );
+  };
+
   const generateDeterministicBrief = (questionText: string) => {
     setValidationError(null);
     const query = questionText.trim() || 'Microgravity fire safety overview';
@@ -146,16 +168,59 @@ export function AiAssistant({
     });
     const hits = rag.selectedRecords;
     const refs = buildRetrievedSourceRefs(hits);
+    const relevantConflicts = findRelevantConflicts(hits);
+
+    const directAnswer =
+      hits.length === 0
+        ? 'Insufficient evidence in reviewed FLAREX records for this query.'
+        : `Retrieved ${hits.length} primary dossier record(s) matching "${query}". Completed studies document microgravity flame behavior within their tested fuel, airflow, and enclosure ranges; planned or terrestrial baseline records are explicitly separated below.`;
+
     const facts = hits
       .map(
         (r) =>
-          `• ${r.shortName} (${r.platform} · ${r.gravityContext} · ${r.evidenceType}): ${r.reportedFindings ?? r.overview} [Source: ${r.sourceUrl}]`
+          `- **${r.shortName}** (${r.platform} · ${r.gravityContext} · ${r.evidenceType}): ${
+            r.reportedFindings ?? 'No completed flight findings published yet; overview: ' + r.overview
+          }`
       )
       .join('\n');
-    const caveats = hits
-      .map((r) => `• ${r.shortName} caveat: ${r.limitations[0] ?? 'See source dossier.'}`)
+
+    const invList = hits
+      .map(
+        (r) =>
+          `- **${r.shortName}** (${r.name}) · Availability: ${r.dataAvailabilityLabel}${
+            r.psiId ? ` · PSI ${r.psiId}` : ''
+          }${r.ntrsDocumentId ? ` · NTRS ${r.ntrsDocumentId}` : ''}`
+      )
       .join('\n');
-    const briefText = `Documented Dossier Facts (Extracted Deterministically — Non-Generative Local Brief Mode):\n${facts}\n\nDocumented Limitations & Boundaries:\n${caveats}`;
+
+    const caveats = [
+      ...hits.map((r) => `- **${r.shortName}:** ${r.limitations[0] ?? 'See source dossier.'}`),
+      ...relevantConflicts.map((c) => `- **Uncertainty (${c.topic}):** ${c.whyApparentConflictExists}`),
+    ].join('\n');
+
+    const referenceList = refs
+      .map((s) => `- ${s.shortName}: ${s.sourceLabel} — ${s.sourceUrl}`)
+      .join('\n');
+
+    const briefText = [
+      `1. Direct answer`,
+      directAnswer,
+      ``,
+      `2. Supporting evidence`,
+      facts || '- Insufficient evidence available in reviewed sources.',
+      ``,
+      `3. Relevant investigations`,
+      invList || '- None matched.',
+      ``,
+      `4. Scientific interpretation`,
+      'Mode C Deterministic Local Brief performs non-generative source extraction only (no speculative AI extrapolation applied).',
+      ``,
+      `5. Limitations`,
+      caveats || '- Raw CSV experimental telemetry remains hosted externally in NASA PSI.',
+      ``,
+      `6. References`,
+      referenceList || '- None.',
+    ].join('\n');
 
     setMessages((prev) => [
       ...prev,
@@ -163,11 +228,13 @@ export function AiAssistant({
       {
         id: `a-${Date.now() + 1}`,
         role: 'assistant',
+        question: query,
         answerMode: 'local',
         model: 'Mode C: Deterministic Local Brief (Non-Generative)',
         classification: rag.diagnostics.classification,
         text: briefText,
         sources: refs,
+        conflicts: relevantConflicts,
         diagnostics: rag.diagnostics,
         citationValidation: validateCitations(briefText, refs, investigations),
       },
@@ -283,18 +350,37 @@ export function AiAssistant({
         documentTitle: attachedDocument?.title,
       });
 
+      const returnedSources = payload.retrievedSources ?? [];
+      const matchedRecords = returnedSources
+        .map((s) => investigations.find((r) => r.id === s.id))
+        .filter((r): r is InvestigationRecord => Boolean(r));
+      const relevantConflicts = findRelevantConflicts(
+        matchedRecords.length > 0 ? matchedRecords : fallbackRag.selectedRecords
+      );
+      const answerText = payload.answer || 'No response text returned.';
+
+      onRecordAiInterpretation?.({
+        id: `ai-${Date.now()}`,
+        text: `${trimmed} -> ${answerText.slice(0, 340)}${answerText.length > 340 ? '…' : ''}`,
+        investigationId: returnedSources[0]?.id ?? focusId ?? undefined,
+        model: payload.model,
+        timestamp: new Date().toISOString(),
+      });
+
       setMessages((prev) => [
         ...prev,
         {
           id: `a-${Date.now()}`,
           role: 'assistant',
+          question: trimmed,
           answerMode: payload.answerMode ?? answerMode,
           latencyMs: payload.latencyMs,
-          text: payload.answer || 'No response text returned.',
+          text: answerText,
           model: payload.model,
           classification:
             payload.queryClassification ?? fallbackRag.diagnostics.classification,
-          sources: payload.retrievedSources ?? [],
+          sources: returnedSources,
+          conflicts: relevantConflicts,
           diagnostics: payload.ragDiagnostics ?? fallbackRag.diagnostics,
           citationValidation: payload.citationValidation,
         },
@@ -342,6 +428,21 @@ export function AiAssistant({
     } catch {
       // Ignore clipboard rejection in restricted iframes
     }
+  };
+
+  const handleDownloadBriefMarkdown = (msg: ChatMessage) => {
+    const content = `# FLAREX Research Brief\n\n**Question:** ${
+      msg.question ?? 'Microgravity combustion query'
+    }\n**Engine:** ${msg.model ?? 'FLAREX Research Intelligence'}\n\n${msg.text}\n`;
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `flarex_assistant_brief_${msg.id}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -575,6 +676,36 @@ export function AiAssistant({
                             <span>Retrieval Diagnostics</span>
                           </button>
                         )}
+                        {msg.role === 'assistant' && onSaveBrief && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSaveBrief({
+                                title: (msg.question ?? 'FLAREX AI Research Brief').slice(0, 80),
+                                question: msg.question ?? 'Microgravity combustion query',
+                                markdown: msg.text,
+                                sourceCount: msg.sources?.length ?? 0,
+                              });
+                              setSavedBriefIds((prev) => new Set(prev).add(msg.id));
+                            }}
+                            aria-label="Save research brief to workspace"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--accent-blue)] cursor-pointer"
+                          >
+                            <FolderPlus className="w-3 h-3" aria-hidden="true" />
+                            <span>{savedBriefIds.has(msg.id) ? 'Saved' : 'Save Brief'}</span>
+                          </button>
+                        )}
+                        {msg.role === 'assistant' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadBriefMarkdown(msg)}
+                            aria-label="Export response as Markdown"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-[6px] bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
+                          >
+                            <Download className="w-3 h-3" aria-hidden="true" />
+                            <span>.md</span>
+                          </button>
+                        )}
                         {msg.role === 'assistant' && (
                           <button
                             type="button"
@@ -601,6 +732,19 @@ export function AiAssistant({
                     <div className="text-[14px] leading-[1.65] text-[var(--text-primary)] whitespace-pre-wrap">
                       {msg.text}
                     </div>
+
+                    {msg.role === 'assistant' && msg.conflicts && msg.conflicts.length > 0 && (
+                      <div className="p-2.5 rounded-[8px] bg-[var(--status-warning)]/10 border border-[var(--status-warning)]/35 text-xs space-y-1">
+                        <p className="font-semibold text-[var(--status-warning)]">
+                          Scientific Uncertainty &amp; Comparability Warning ({msg.conflicts.length}):
+                        </p>
+                        {msg.conflicts.slice(0, 2).map((c) => (
+                          <p key={c.id} className="text-[11px] text-[var(--text-secondary)]">
+                            <strong>{c.topic}:</strong> {c.whyApparentConflictExists}
+                          </p>
+                        ))}
+                      </div>
+                    )}
 
                     {msg.diagnostics && expandedDiagnosticsId === msg.id && (
                       <div className="p-3 rounded-[8px] bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-2 text-[11px]">

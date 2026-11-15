@@ -37,7 +37,11 @@ import {
   IngestedDatasetPackage,
   ingestScientificTabularData,
 } from '../utils/scientificIngestion';
-import { Badge } from './ui/Badge';
+import {
+  buildDatasetQualityReport,
+  DatasetReadinessLevel,
+} from '../utils/scientificValidation';
+import { Badge, BadgeTone } from './ui/Badge';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Select } from './ui/Input';
@@ -130,6 +134,7 @@ export function NumericalWorkbench({
   const [activeRun, setActiveRun] = useState<ReproducibleAnalysisRun | null>(
     analysisHistory[0] ?? null
   );
+  const [showValidationDetails, setShowValidationDetails] = useState(true);
 
   const activeDataset = useMemo(
     () =>
@@ -285,6 +290,27 @@ export function NumericalWorkbench({
   const xColMeta = numericColumns.find((c) => c.normalizedName === resolvedX);
   const yColMeta = numericColumns.find((c) => c.normalizedName === resolvedY);
 
+  const qualityReport = useMemo(() => {
+    if (!activeDataset) return null;
+    const dsRuns = analysisHistory.filter(
+      (r) => r.datasetId === activeDataset.provenance.datasetId
+    );
+    return buildDatasetQualityReport(activeDataset, dsRuns);
+  }, [activeDataset, analysisHistory]);
+
+  const readinessTone = (lvl: DatasetReadinessLevel): BadgeTone => {
+    switch (lvl) {
+      case 'READY_FOR_ANALYSIS':
+        return 'success';
+      case 'USABLE_WITH_CAVEATS':
+        return 'cyan';
+      case 'REQUIRES_CLEANING':
+        return 'warning';
+      case 'NOT_SUITABLE_FOR_NUMERICAL_ANALYSIS':
+        return 'danger';
+    }
+  };
+
   return (
     <Card as="section" aria-labelledby="numerical-workbench-heading" className="space-y-5">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -427,6 +453,72 @@ export function NumericalWorkbench({
               </p>
             )}
           </div>
+
+          {/* Module E: 12-Check Data Quality & Scientific Validation Lab */}
+          {qualityReport && (
+            <div className="p-3.5 rounded-[10px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                    Dataset Quality &amp; Scientific Validation (12 Checks)
+                  </span>
+                  <Badge tone={readinessTone(qualityReport.readinessAssessment)}>
+                    {qualityReport.readinessAssessment}
+                  </Badge>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowValidationDetails((v) => !v)}
+                  className="text-xs font-medium text-[var(--accent-blue)] hover:underline cursor-pointer"
+                >
+                  {showValidationDetails ? 'Collapse 12 Checks' : 'Inspect 12 Checks'}
+                </button>
+              </div>
+              <p className="text-xs text-[var(--text-secondary)]">
+                {qualityReport.readinessRationale}
+              </p>
+
+              {showValidationDetails && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+                    {qualityReport.checks.map((chk) => (
+                      <div
+                        key={chk.checkNumber}
+                        className="p-2.5 rounded-[8px] bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-1"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-[var(--text-primary)]">
+                            {chk.checkNumber}. {chk.checkName}
+                          </span>
+                          <Badge
+                            tone={
+                              chk.status === 'PASS'
+                                ? 'success'
+                                : chk.status === 'FAIL'
+                                ? 'danger'
+                                : chk.status === 'WARNING'
+                                ? 'warning'
+                                : 'neutral'
+                            }
+                          >
+                            {chk.status}
+                          </Badge>
+                        </div>
+                        <p className="text-[11px] text-[var(--text-secondary)]">
+                          {chk.summary}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[11px] text-[var(--text-muted)] space-y-0.5 pt-1 border-t border-[var(--border-subtle)]">
+                    {qualityReport.statisticalGuardrails.map((g) => (
+                      <p key={g}>• {g}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Schema + Raw vs Normalized Preview */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">

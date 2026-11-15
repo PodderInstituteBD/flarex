@@ -17,6 +17,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { EmptyState, NoticeBanner } from '../components/ui/States';
 import { InvestigationRecord } from '../types/research';
 import { analyzeCrossInvestigations } from '../utils/crossInvestigation';
+import { analyzeCrossStudyComparison } from '../utils/crossStudyAnalysis';
 import { analyzeExperimentalConditions } from '../utils/experimentalConditions';
 import { buildComparisonRows } from '../utils/researchLogic';
 
@@ -59,6 +60,11 @@ export function InvestigationComparison({
 
   const conditionReport = useMemo(
     () => analyzeExperimentalConditions(selectedRecords),
+    [selectedRecords]
+  );
+
+  const crossStudyReport = useMemo(
+    () => analyzeCrossStudyComparison(selectedRecords),
     [selectedRecords]
   );
 
@@ -323,12 +329,107 @@ export function InvestigationComparison({
             </div>
           </Card>
 
+          {/* Module C: FLAREX 6.0 12-Dimension Cross-Investigation Intelligence */}
+          <Card padding="md" className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
+                  Cross-Investigation Compatibility &amp; Finding Synthesis (12 Dimensions)
+                </h2>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  {crossStudyReport.groundedExplanation}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  tone={
+                    crossStudyReport.compatibilityClass === 'Directly comparable'
+                      ? 'success'
+                      : crossStudyReport.compatibilityClass === 'Not scientifically comparable'
+                      ? 'danger'
+                      : crossStudyReport.compatibilityClass === 'Insufficient information'
+                      ? 'neutral'
+                      : 'warning'
+                  }
+                >
+                  Compatibility: {crossStudyReport.compatibilityClass}
+                </Badge>
+                <Badge tone="blue">
+                  Findings: {crossStudyReport.findingComparisonClass}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1">
+                <p className="font-semibold text-[var(--status-success)]">Shared Variables</p>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  {crossStudyReport.sharedExperimentalVariables.join(', ') || 'None shared directly'}
+                </p>
+              </div>
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1">
+                <p className="font-semibold text-[var(--accent-blue)]">Different Variables / Methods</p>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  {[
+                    ...crossStudyReport.differentExperimentalVariables,
+                    ...crossStudyReport.differentMeasurementTechniques,
+                  ]
+                    .slice(0, 4)
+                    .join(' · ') || 'Aligned'}
+                </p>
+              </div>
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1">
+                <p className="font-semibold text-[var(--status-warning)]">Missing Parameters</p>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  {crossStudyReport.missingParameters.slice(0, 3).join(' · ') || 'None detected'}
+                </p>
+              </div>
+              <div className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1">
+                <p className="font-semibold text-[var(--status-danger)]">Incompatible Units</p>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  {crossStudyReport.incompatibleUnits.slice(0, 2).join(' · ') || 'None detected'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 text-xs">
+              {crossStudyReport.dimensions12.map((dim) => (
+                <div
+                  key={dim.dimension}
+                  className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1.5 min-w-0"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="font-semibold text-[var(--text-primary)]">
+                      {dim.dimension}
+                    </span>
+                    <Badge
+                      tone={
+                        dim.status === 'Aligned'
+                          ? 'success'
+                          : dim.status === 'Incompatible'
+                          ? 'danger'
+                          : dim.status === 'Partially comparable'
+                          ? 'cyan'
+                          : 'neutral'
+                      }
+                    >
+                      {dim.status}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                    {dim.note}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Card>
+
           {/* Module 9: Experimental Condition Intelligence (8-Parameter Matrix) */}
           <Card padding="md" className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <h2 className="font-display text-base font-bold text-[var(--text-primary)]">
-                  Experimental Condition Intelligence (8-Parameter Matrix)
+                  Experimental Condition Summary ({conditionReport.dimensions.length} Core Parameters)
                 </h2>
                 <p className="text-xs text-[var(--text-secondary)]">
                   {conditionReport.guidanceNote}
@@ -345,37 +446,6 @@ export function InvestigationComparison({
               >
                 Overall: {conditionReport.overallStatus}
               </Badge>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 text-xs">
-              {conditionReport.dimensions.map((dim) => (
-                <div
-                  key={dim.dimension}
-                  className="p-3 rounded-[8px] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] space-y-1.5 min-w-0"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-1.5">
-                    <span className="font-semibold text-[var(--text-primary)]">
-                      {dim.dimension}
-                    </span>
-                    <Badge
-                      tone={
-                        dim.status === 'Compatible'
-                          ? 'success'
-                          : dim.status === 'Incompatible'
-                          ? 'danger'
-                          : dim.status === 'Partially comparable'
-                          ? 'cyan'
-                          : 'neutral'
-                      }
-                    >
-                      {dim.status}
-                    </Badge>
-                  </div>
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                    {dim.summary}
-                  </p>
-                </div>
-              ))}
             </div>
           </Card>
 

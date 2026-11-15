@@ -14,7 +14,10 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { PageHeader } from '../components/ui/PageHeader';
+import { RESEARCH_GAPS } from '../data/researchCatalog';
 import { InvestigationRecord } from '../types/research';
+import { extractAndVerifyDossierClaims } from '../utils/claimVerification';
+import { buildEvidenceCatalog } from '../utils/evidenceIntelligence';
 import {
   buildKnowledgeGraph,
   KnowledgeNode,
@@ -23,11 +26,13 @@ import {
   NODE_TYPE_META,
   summarizeGraphAudit,
 } from '../utils/knowledgeGraph';
+import type { IngestedDatasetPackage } from '../utils/scientificIngestion';
 
 interface KnowledgeGraphProps {
   investigations: InvestigationRecord[];
   initialFocusId?: string | 'ALL';
   onOpenInvestigation: (id: string) => void;
+  ingestedDatasets?: IngestedDatasetPackage[];
 }
 
 const ALL_NODE_TYPES = Object.keys(NODE_TYPE_META) as KnowledgeNodeType[];
@@ -36,9 +41,11 @@ export function KnowledgeGraph({
   investigations,
   initialFocusId = 'ALL',
   onOpenInvestigation,
+  ingestedDatasets = [],
 }: KnowledgeGraphProps) {
   const [focusId, setFocusId] = useState<string | 'ALL'>(initialFocusId);
   const [includeInferred, setIncludeInferred] = useState(true);
+  const [relationshipFilter, setRelationshipFilter] = useState<string | 'ALL'>('ALL');
   const [activeTypes, setActiveTypes] = useState<Set<KnowledgeNodeType>>(
     () => new Set(ALL_NODE_TYPES)
   );
@@ -48,13 +55,30 @@ export function KnowledgeGraph({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
+  const dossierClaims = useMemo(() => {
+    const catalog = buildEvidenceCatalog({
+      investigations,
+      gaps: RESEARCH_GAPS,
+      ingestedDatasets,
+    });
+    return extractAndVerifyDossierClaims(investigations, catalog);
+  }, [investigations, ingestedDatasets]);
+
   const graph = useMemo(
     () =>
       buildKnowledgeGraph(investigations, {
         focusInvestigationId: focusId,
         includeInferred,
+        gaps: RESEARCH_GAPS,
+        claims: dossierClaims,
+        ingestedDatasets,
       }),
-    [investigations, focusId, includeInferred]
+    [investigations, focusId, includeInferred, dossierClaims, ingestedDatasets]
+  );
+
+  const availableRelationships = useMemo(
+    () => Array.from(new Set(graph.edges.map((e) => e.relationship))).sort(),
+    [graph.edges]
   );
 
   const filteredNodes = useMemo(() => {
@@ -77,9 +101,12 @@ export function KnowledgeGraph({
   const visibleEdges = useMemo(
     () =>
       graph.edges.filter(
-        (e) => visibleNodeIds.has(e.source) && visibleNodeIds.has(e.target)
+        (e) =>
+          visibleNodeIds.has(e.source) &&
+          visibleNodeIds.has(e.target) &&
+          (relationshipFilter === 'ALL' || e.relationship === relationshipFilter)
       ),
-    [graph.edges, visibleNodeIds]
+    [graph.edges, visibleNodeIds, relationshipFilter]
   );
 
   const graphAudit = useMemo(
@@ -171,7 +198,7 @@ export function KnowledgeGraph({
             </select>
           </div>
 
-          <div className="md:col-span-4 space-y-1">
+          <div className="md:col-span-3 space-y-1">
             <label
               htmlFor="kg-search-input"
               className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]"
@@ -188,13 +215,35 @@ export function KnowledgeGraph({
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter nodes (e.g. O2, PMMA, SAFFIRE, NTRS)..."
+                placeholder="Filter nodes (e.g. O2, PMMA, SAFFIRE)..."
                 className="w-full pl-8 pr-3 py-2 text-xs rounded-[8px] bg-[var(--bg-input)] border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
               />
             </div>
           </div>
 
-          <div className="md:col-span-4 flex flex-wrap items-center gap-2 justify-start md:justify-end">
+          <div className="md:col-span-2 space-y-1">
+            <label
+              htmlFor="kg-predicate-select"
+              className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]"
+            >
+              Relationship Predicate
+            </label>
+            <select
+              id="kg-predicate-select"
+              value={relationshipFilter}
+              onChange={(e) => setRelationshipFilter(e.target.value)}
+              className="w-full px-2.5 py-2 text-xs rounded-[8px] bg-[var(--bg-input)] border border-[var(--border-subtle)] text-[var(--text-primary)]"
+            >
+              <option value="ALL">All Predicates ({availableRelationships.length})</option>
+              {availableRelationships.map((rel) => (
+                <option key={rel} value={rel}>
+                  {rel}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-3 flex flex-wrap items-center gap-2 justify-start md:justify-end">
             <Button
               variant={includeInferred ? 'secondary' : 'outline'}
               size="sm"
@@ -283,7 +332,7 @@ export function KnowledgeGraph({
                 Inferred RELATED_TO ({graphAudit.inferredEdges})
               </span>
               <span className="text-[var(--text-muted)] hidden sm:inline">
-                Predicates: INVESTIGATES · USES_MATERIAL · MEASURES · USES_SENSOR · DOCUMENTED_IN · SUPPORTS_FINDING · RELATED_TO
+                {availableRelationships.length} predicates (verified + inferred: SUPPORTS_CLAIM, DERIVED_FROM, HAS_EXPERIMENTAL_CONDITION, HAS_DATASET, HAS_RESEARCH_GAP)
               </span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -338,6 +387,7 @@ export function KnowledgeGraph({
                   size="sm"
                   onClick={() => {
                     setSearchQuery('');
+                    setRelationshipFilter('ALL');
                     setActiveTypes(new Set(ALL_NODE_TYPES));
                     setFocusId('ALL');
                     resetViewport();

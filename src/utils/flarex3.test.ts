@@ -147,7 +147,10 @@ test('Module 2 Document Intelligence extracts CSV, JSON, XML, TXT, and PDF heade
 
 test('Module 3 Knowledge Graph supports all 10 node types and separates VERIFIED vs INFERRED edges', () => {
   const fullGraph = buildKnowledgeGraph(RECORDS, { includeInferred: true });
-  assert.ok(Object.keys(NODE_TYPE_META).length === 10);
+  assert.ok(Object.keys(NODE_TYPE_META).length >= 10);
+  for (const nt of ['INVESTIGATION', 'PUBLICATION', 'PLATFORM', 'FUEL', 'VARIABLE', 'SENSOR', 'METHOD', 'FINDING', 'TOPIC', 'LIMITATION'] as const) {
+    assert.ok(nt in NODE_TYPE_META);
+  }
   assert.ok(fullGraph.edges.some((e) => e.verification === 'VERIFIED'));
   assert.ok(fullGraph.edges.some((e) => e.verification === 'INFERRED'));
 

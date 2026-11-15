@@ -48,6 +48,22 @@ interface HomeOverviewProps {
   onOpenInvestigation: (id: string) => void;
   onSelectCategoryFilter: (categoryId: DomainCategoryId) => void;
   onOpenDemoMode?: () => void;
+  evidenceSummary?: {
+    totalEvidence: number;
+    supportedClaims: number;
+    multiSourceClaims: number;
+    needsVerificationClaims: number;
+    potentialConflicts: number;
+    readinessCheckedCount: number;
+  };
+  sessionMetrics?: {
+    checkedSourcesCount: number;
+    retrievedDocumentsCount: number;
+    generatedReportsCount: number;
+    importedDatasetsCount: number;
+    analysisRunsCount: number;
+  };
+  onOpenEvidenceTab?: (tab: 'catalog' | 'claims' | 'conflicts' | 'audit') => void;
 }
 
 const CATEGORY_ICON_MAP: Record<DomainCategoryId, typeof Flame> = {
@@ -68,6 +84,9 @@ export function HomeOverview({
   onOpenInvestigation,
   onSelectCategoryFilter,
   onOpenDemoMode,
+  evidenceSummary,
+  sessionMetrics,
+  onOpenEvidenceTab,
 }: HomeOverviewProps) {
   const categories = useMemo(
     () => computeCategoryBreakdown(investigations),
@@ -420,6 +439,119 @@ export function HomeOverview({
           </Card>
         </div>
       </section>
+
+      {/* FLAREX 6.0 Evidence Intelligence & Honest Session Activity */}
+      {evidenceSummary && sessionMetrics && (
+        <section aria-labelledby="evidence-intelligence-overview" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+            <div>
+              <h2
+                id="evidence-intelligence-overview"
+                className="font-display text-[20px] font-semibold text-[var(--text-primary)]"
+              >
+                Evidence Intelligence &amp; Session Activity
+              </h2>
+              <p className="text-[13px] text-[var(--text-secondary)]">
+                Claim-level citation classification and live counts from your actual session actions (zero simulated telemetry).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                onOpenEvidenceTab ? onOpenEvidenceTab('audit') : onNavigate('evidence')
+              }
+              className="text-xs font-medium text-[var(--accent-blue)] hover:underline inline-flex items-center gap-1 self-start sm:self-auto cursor-pointer"
+            >
+              <span>Open Scientific Audit Center</span>
+              <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+            <button
+              type="button"
+              onClick={() =>
+                onOpenEvidenceTab ? onOpenEvidenceTab('catalog') : onNavigate('evidence')
+              }
+              className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 p-4 text-left transition-colors cursor-pointer"
+            >
+              <p className="text-[12px] text-[var(--text-secondary)]">Evidence Catalog Items</p>
+              <p className="mt-1.5 text-[24px] font-bold font-mono-tabular text-[var(--accent-blue)]">
+                {evidenceSummary.totalEvidence}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">7 typed evidence classes</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onOpenEvidenceTab ? onOpenEvidenceTab('claims') : onNavigate('evidence')
+              }
+              className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 p-4 text-left transition-colors cursor-pointer"
+            >
+              <p className="text-[12px] text-[var(--text-secondary)]">Direct / Multi-Source Claims</p>
+              <p className="mt-1.5 text-[24px] font-bold font-mono-tabular text-[var(--status-success)]">
+                {evidenceSummary.supportedClaims + evidenceSummary.multiSourceClaims}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                {evidenceSummary.multiSourceClaims} multi-source verified
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onOpenEvidenceTab ? onOpenEvidenceTab('claims') : onNavigate('evidence')
+              }
+              className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 p-4 text-left transition-colors cursor-pointer"
+            >
+              <p className="text-[12px] text-[var(--text-secondary)]">Needs Verification</p>
+              <p className="mt-1.5 text-[24px] font-bold font-mono-tabular text-[var(--status-warning)]">
+                {evidenceSummary.needsVerificationClaims}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">Partial / planned / AI-only</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                onOpenEvidenceTab ? onOpenEvidenceTab('conflicts') : onNavigate('evidence')
+              }
+              className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 p-4 text-left transition-colors cursor-pointer"
+            >
+              <p className="text-[12px] text-[var(--text-secondary)]">Conflicts &amp; Uncertainty</p>
+              <p className="mt-1.5 text-[24px] font-bold font-mono-tabular text-[var(--accent-cyan)]">
+                {evidenceSummary.potentialConflicts}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">Scale, gravity, regime notes</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('data')}
+              className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 p-4 text-left transition-colors cursor-pointer"
+            >
+              <p className="text-[12px] text-[var(--text-secondary)]">Session Data &amp; Runs</p>
+              <p className="mt-1.5 text-[24px] font-bold font-mono-tabular text-[var(--text-primary)]">
+                {sessionMetrics.importedDatasetsCount} / {sessionMetrics.analysisRunsCount}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">Datasets / deterministic runs</p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onNavigate('sources')}
+              className="rounded-[12px] border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent-blue)]/60 p-4 text-left transition-colors cursor-pointer"
+            >
+              <p className="text-[12px] text-[var(--text-secondary)]">Live Session Activity</p>
+              <p className="mt-1.5 text-[24px] font-bold font-mono-tabular text-[var(--text-primary)]">
+                {sessionMetrics.checkedSourcesCount} · {sessionMetrics.retrievedDocumentsCount} · {sessionMetrics.generatedReportsCount}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--text-muted)]">URL checks · Docs · Reports</p>
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* 7 Research Domain Categories */}
       <section aria-labelledby="domain-categories-heading" className="space-y-4">

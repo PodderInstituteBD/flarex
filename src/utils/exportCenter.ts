@@ -4,6 +4,8 @@ import { buildComparisonRows } from './researchLogic.ts';
 import type { ResearchWorkspaceState } from './workspaceStore.ts';
 
 export type ExportReportType =
+  | 'investigation_report_v2'
+  | 'numerical_analysis_report_v2'
   | 'scientific_full_report'
   | 'investigation_profile'
   | 'comparison_report'
@@ -39,12 +41,15 @@ function toCsvTable(headers: string[], rows: Array<Array<string | number | boole
 
 export function generateExportCsv(input: ExportBundleInput): string {
   switch (input.reportType) {
+    case 'investigation_report_v2':
+    case 'numerical_analysis_report_v2':
     case 'scientific_full_report':
     case 'investigation_profile':
     case 'database_records': {
       const target =
         (input.reportType === 'investigation_profile' ||
-          input.reportType === 'scientific_full_report') &&
+          input.reportType === 'scientific_full_report' ||
+          input.reportType === 'investigation_report_v2') &&
         input.selectedInvestigations.length > 0
           ? input.selectedInvestigations
           : input.allInvestigations;
@@ -237,6 +242,8 @@ export function generateExportJson(input: ExportBundleInput): string {
   };
 
   switch (input.reportType) {
+    case 'investigation_report_v2':
+    case 'numerical_analysis_report_v2':
     case 'scientific_full_report':
     case 'investigation_profile':
     case 'database_records':
@@ -245,7 +252,8 @@ export function generateExportJson(input: ExportBundleInput): string {
           ...baseEnvelope,
           records:
             (input.reportType === 'investigation_profile' ||
-              input.reportType === 'scientific_full_report') &&
+              input.reportType === 'scientific_full_report' ||
+              input.reportType === 'investigation_report_v2') &&
             input.selectedInvestigations.length > 0
               ? input.selectedInvestigations
               : input.allInvestigations,
@@ -318,12 +326,15 @@ export function generateExportMarkdown(input: ExportBundleInput): string {
   }
 
   switch (input.reportType) {
+    case 'investigation_report_v2':
+    case 'numerical_analysis_report_v2':
     case 'scientific_full_report':
     case 'investigation_profile':
     case 'database_records': {
       const target =
         (input.reportType === 'investigation_profile' ||
-          input.reportType === 'scientific_full_report') &&
+          input.reportType === 'scientific_full_report' ||
+          input.reportType === 'investigation_report_v2') &&
         input.selectedInvestigations.length > 0
           ? input.selectedInvestigations
           : input.allInvestigations;

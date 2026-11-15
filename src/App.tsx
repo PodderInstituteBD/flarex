@@ -7,12 +7,14 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { DemoTourModal } from './components/DemoTourModal';
 import { AppPage, CopyToastState, Layout } from './components/Layout';
 import { LoadingSkeleton } from './components/ui/States';
-import { INVESTIGATIONS } from './data/researchCatalog';
+import { INVESTIGATIONS, RESEARCH_GAPS } from './data/researchCatalog';
 import { HomeOverview } from './pages/HomeOverview';
 import { InvestigationDetails } from './pages/InvestigationDetails';
 import { InvestigationExplorer } from './pages/InvestigationExplorer';
 import { InvestigationRecord } from './types/research';
+import { verifyClaimAgainstEvidence } from './utils/claimVerification';
 import { DemoTourStep } from './utils/demoGuide';
+import { buildEvidenceCatalog, AiInterpretationInput } from './utils/evidenceIntelligence';
 import { ExportReportType } from './utils/exportCenter';
 import {
   resolveGlobalShortcut,
@@ -21,17 +23,31 @@ import {
 import { computeResearchStats, DomainCategoryId } from './utils/researchLogic';
 import { ReproducibleAnalysisRun } from './utils/scientificAnalysis';
 import { IngestedDatasetPackage } from './utils/scientificIngestion';
+import { detectScientificConflicts } from './utils/scientificUncertainty';
 import { buildResearchUrlPath, parseResearchUrlState } from './utils/urlState';
 import {
   addSavedComparison,
   BookmarkedSourceEntry,
   createCollection,
   deleteCollection,
+  deleteResearchBrief,
   deleteResearchNote,
+  deleteResearchQuestion,
+  deleteSavedComparison,
+  deleteSavedEvidence,
+  deleteWorkspaceReport,
+  importWorkspaceBundle,
   loadWorkspaceFromStorage,
   ResearchWorkspaceState,
+  SavedEvidenceEntry,
+  SavedReportEntry,
+  SavedResearchBriefEntry,
+  saveResearchBrief,
+  saveResearchQuestion,
+  saveWorkspaceReport,
   saveWorkspaceToStorage,
   toggleBookmarkedSource,
+  toggleSavedEvidence,
   toggleSavedInvestigation,
   upsertResearchNote,
 } from './utils/workspaceStore';
@@ -247,8 +263,59 @@ export default function App() {
   const [activeDocumentForAi, setActiveDocumentForAi] =
     useState<ActiveAiDocumentContext | null>(null);
   const [clientErrors, setClientErrors] = useState<ClientErrorLogItem[]>([]);
+  const [checkedSourcesCount, setCheckedSourcesCount] = useState(0);
+  const [retrievedDocTitles, setRetrievedDocTitles] = useState<string[]>([]);
+  const [generatedReportsCount, setGeneratedReportsCount] = useState(0);
+  const [aiInterpretations, setAiInterpretations] = useState<AiInterpretationInput[]>([]);
+  const [evidenceInitialTab, setEvidenceInitialTab] = useState<
+    'catalog' | 'claims' | 'conflicts' | 'audit'
+  >('catalog');
 
   const stats = useMemo(() => computeResearchStats(INVESTIGATIONS), []);
+
+  const evidenceCatalog = useMemo(
+    () =>
+      buildEvidenceCatalog({
+        investigations: INVESTIGATIONS,
+        gaps: RESEARCH_GAPS,
+        ingestedDatasets,
+        analysisRuns: analysisHistory,
+        aiInterpretations,
+      }),
+    [ingestedDatasets, analysisHistory, aiInterpretations]
+  );
+
+  const dashboardEvidenceSummary = useMemo(() => {
+    const conflicts = detectScientificConflicts({
+      investigations: INVESTIGATIONS,
+      evidenceCatalog,
+      ingestedDatasets,
+    });
+    const sampleClaims = INVESTIGATIONS.slice(0, 10).map((r) =>
+      verifyClaimAgainstEvidence(
+        r.reportedFindings ?? r.overview,
+        evidenceCatalog,
+        { origin: 'DOSSIER_FACT', targetInvestigationId: r.id }
+      )
+    );
+    return {
+      totalEvidence: evidenceCatalog.length,
+      supportedClaims: sampleClaims.filter(
+        (c) => c.verificationStatus === 'Supported by direct evidence'
+      ).length,
+      multiSourceClaims: sampleClaims.filter(
+        (c) => c.verificationStatus === 'Supported by multiple sources'
+      ).length,
+      needsVerificationClaims: sampleClaims.filter(
+        (c) =>
+          c.verificationStatus === 'Partially supported' ||
+          c.verificationStatus === 'Insufficient evidence' ||
+          c.verificationStatus === 'AI interpretation only'
+      ).length,
+      potentialConflicts: conflicts.length,
+      readinessCheckedCount: ingestedDatasets.length,
+    };
+  }, [evidenceCatalog, ingestedDatasets]);
 
   useEffect(() => {
     try {
@@ -669,6 +736,95 @@ export default function App() {
     [showCopyToast]
   );
 
+  const handleSaveResearchQuestion = useCallback(
+    (question: string, classificationLabel: string) => {
+      setWorkspace((prev) => saveResearchQuestion(prev, question, classificationLabel));
+      showCopyToast('Research question saved to workspace');
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteResearchQuestion = useCallback(
+    (id: string) => {
+      setWorkspace((prev) => deleteResearchQuestion(prev, id));
+      showCopyToast('Saved question removed');
+    },
+    [showCopyToast]
+  );
+
+  const handleSaveResearchBrief = useCallback(
+    (brief: Omit<SavedResearchBriefEntry, 'id' | 'createdAt'>) => {
+      setWorkspace((prev) => saveResearchBrief(prev, brief));
+      showCopyToast('Research brief saved to workspace');
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteResearchBrief = useCallback(
+    (id: string) => {
+      setWorkspace((prev) => deleteResearchBrief(prev, id));
+      showCopyToast('Saved brief removed');
+    },
+    [showCopyToast]
+  );
+
+  const handleToggleSaveEvidence = useCallback(
+    (item: Omit<SavedEvidenceEntry, 'savedAt'>) => {
+      setWorkspace((prev) => {
+        const existed = prev.savedEvidence.some((e) => e.evidenceId === item.evidenceId);
+        showCopyToast(existed ? 'Evidence removed from workspace' : 'Evidence saved to workspace');
+        return toggleSavedEvidence(prev, item);
+      });
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteSavedEvidence = useCallback(
+    (evidenceId: string) => {
+      setWorkspace((prev) => deleteSavedEvidence(prev, evidenceId));
+      showCopyToast('Saved evidence removed');
+    },
+    [showCopyToast]
+  );
+
+  const handleSaveReport = useCallback(
+    (report: Omit<SavedReportEntry, 'id' | 'createdAt'>) => {
+      setWorkspace((prev) => saveWorkspaceReport(prev, report));
+      setGeneratedReportsCount((c) => c + 1);
+      showCopyToast('Scientific report saved to workspace');
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteSavedReport = useCallback(
+    (id: string) => {
+      setWorkspace((prev) => deleteWorkspaceReport(prev, id));
+      showCopyToast('Saved report removed');
+    },
+    [showCopyToast]
+  );
+
+  const handleDeleteSavedComparison = useCallback(
+    (id: string) => {
+      setWorkspace((prev) => deleteSavedComparison(prev, id));
+      showCopyToast('Saved comparison removed');
+    },
+    [showCopyToast]
+  );
+
+  const handleImportWorkspace = useCallback(
+    (rawJson: string): { ok: boolean; error?: string } => {
+      const outcome = importWorkspaceBundle(rawJson, VALID_INVESTIGATION_IDS);
+      if (outcome.ok && outcome.state) {
+        setWorkspace(outcome.state);
+        showCopyToast('Workspace imported from JSON backup');
+        return { ok: true };
+      }
+      return { ok: false, error: outcome.error || 'Import failed.' };
+    },
+    [showCopyToast]
+  );
+
   const handleLoadComparison = useCallback((ids: string[]) => {
     const valid = ids
       .filter((id) => VALID_INVESTIGATION_IDS.has(id))
@@ -700,7 +856,11 @@ export default function App() {
     workspace.savedInvestigationIds.length +
     workspace.bookmarkedSources.length +
     workspace.notes.length +
-    workspace.savedComparisons.length;
+    workspace.savedComparisons.length +
+    workspace.savedQuestions.length +
+    workspace.savedBriefs.length +
+    workspace.savedEvidence.length +
+    workspace.savedReports.length;
 
   useEffect(() => {
     const pageTitles: Record<AppPage, string> = {
@@ -758,6 +918,18 @@ export default function App() {
           onOpenInvestigation={handleOpenInvestigation}
           onSelectCategoryFilter={handleSelectCategoryFilter}
           onOpenDemoMode={() => setDemoOpen(true)}
+          evidenceSummary={dashboardEvidenceSummary}
+          sessionMetrics={{
+            checkedSourcesCount,
+            retrievedDocumentsCount: retrievedDocTitles.length,
+            generatedReportsCount,
+            importedDatasetsCount: ingestedDatasets.length,
+            analysisRunsCount: analysisHistory.length,
+          }}
+          onOpenEvidenceTab={(tab) => {
+            setEvidenceInitialTab(tab);
+            handleNavigate('evidence');
+          }}
         />
       )}
 
@@ -826,6 +998,7 @@ export default function App() {
             investigations={INVESTIGATIONS}
             initialFocusId={graphFocusId}
             onOpenInvestigation={handleOpenInvestigation}
+            ingestedDatasets={ingestedDatasets}
           />
         </Suspense>
       )}
@@ -839,7 +1012,12 @@ export default function App() {
               handleNavigate('data');
               showCopyToast('Dataset imported into Numerical Analysis');
             }}
-            onAnalyzeDocumentInAi={(doc) => handleAttachDocumentToAi(doc, true)}
+            onAnalyzeDocumentInAi={(doc) => {
+              setRetrievedDocTitles((prev) =>
+                prev.includes(doc.title) ? prev : [doc.title, ...prev].slice(0, 20)
+              );
+              handleAttachDocumentToAi(doc, true);
+            }}
           />
         </Suspense>
       )}
@@ -849,6 +1027,15 @@ export default function App() {
           <EvidenceEngine
             investigations={INVESTIGATIONS}
             onOpenInvestigation={handleOpenInvestigation}
+            ingestedDatasets={ingestedDatasets}
+            analysisHistory={analysisHistory}
+            checkedSourcesCount={checkedSourcesCount}
+            retrievedDocumentsCount={retrievedDocTitles.length}
+            generatedReportsCount={generatedReportsCount}
+            aiInterpretations={aiInterpretations}
+            savedEvidenceIds={workspace.savedEvidence.map((e) => e.evidenceId)}
+            onToggleSaveEvidence={handleToggleSaveEvidence}
+            initialTab={evidenceInitialTab}
           />
         </Suspense>
       )}
@@ -864,6 +1051,10 @@ export default function App() {
             attachedDocument={activeDocumentForAi}
             onClearAttachedDocument={() => setActiveDocumentForAi(null)}
             onRecordClientError={handleRecordClientError}
+            onSaveBrief={handleSaveResearchBrief}
+            onRecordAiInterpretation={(item) =>
+              setAiInterpretations((prev) => [item, ...prev].slice(0, 20))
+            }
           />
         </Suspense>
       )}
@@ -874,6 +1065,9 @@ export default function App() {
             investigations={INVESTIGATIONS}
             onOpenInvestigation={handleOpenInvestigation}
             onAskAiQuestion={handleAskGapQuestion}
+            ingestedDatasets={ingestedDatasets}
+            onSaveQuestion={handleSaveResearchQuestion}
+            onSaveBrief={handleSaveResearchBrief}
           />
         </Suspense>
       )}
@@ -883,6 +1077,8 @@ export default function App() {
           <ResearchWorkspace
             investigations={INVESTIGATIONS}
             workspace={workspace}
+            ingestedDatasets={ingestedDatasets}
+            analysisHistory={analysisHistory}
             onToggleSaveInvestigation={handleToggleSaveInvestigation}
             onRemoveBookmark={handleRemoveBookmarkUrl}
             onSaveNote={handleSaveNote}
@@ -890,6 +1086,12 @@ export default function App() {
             onCreateCollection={handleCreateCollection}
             onDeleteCollection={handleDeleteCollection}
             onLoadComparison={handleLoadComparison}
+            onDeleteComparison={handleDeleteSavedComparison}
+            onDeleteQuestion={handleDeleteResearchQuestion}
+            onDeleteBrief={handleDeleteResearchBrief}
+            onDeleteEvidence={handleDeleteSavedEvidence}
+            onDeleteReport={handleDeleteSavedReport}
+            onImportWorkspace={handleImportWorkspace}
             onOpenInvestigation={handleOpenInvestigation}
             onNavigate={handleNavigate}
           />
@@ -905,6 +1107,8 @@ export default function App() {
             initialReportType={exportReportType}
             ingestedDatasets={ingestedDatasets}
             analysisHistory={analysisHistory}
+            onSaveReport={handleSaveReport}
+            onReportDownloaded={() => setGeneratedReportsCount((c) => c + 1)}
           />
         </Suspense>
       )}
@@ -916,8 +1120,23 @@ export default function App() {
             onOpenInvestigation={handleOpenInvestigation}
             bookmarkedSources={workspace.bookmarkedSources}
             onToggleBookmark={handleToggleBookmarkSource}
-            onAttachNtrsDocument={(doc) => handleAttachDocumentToAi(doc, true)}
+            onAttachNtrsDocument={(doc) => {
+              setRetrievedDocTitles((prev) =>
+                prev.includes(doc.title) ? prev : [doc.title, ...prev].slice(0, 20)
+              );
+              handleAttachDocumentToAi(doc, true);
+            }}
             onRecordClientError={handleRecordClientError}
+            onRecordSourceChecked={(delta = 1) =>
+              setCheckedSourcesCount((c) => c + delta)
+            }
+            onRecordRetrievedDocument={(title) =>
+              setRetrievedDocTitles((prev) =>
+                prev.includes(title) ? prev : [title, ...prev].slice(0, 20)
+              )
+            }
+            ingestedDatasets={ingestedDatasets}
+            retrievedDocTitles={retrievedDocTitles}
           />
         </Suspense>
       )}
